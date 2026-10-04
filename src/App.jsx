@@ -2362,8 +2362,8 @@ export default function App() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
-      {/* Easter-egg otter: viewport-anchored bottom-right, painted before the
-          tile layer so it lives in the background, never intercepting clicks.
+      {/* Easter-egg otter: viewport-anchored bottom-right, floating above
+          tiles but below UI chrome, never intercepting clicks.
           Drop the gif at public/otter.gif — without it this renders nothing. */}
       {otterOn && (
         <img
@@ -2372,7 +2372,7 @@ export default function App() {
           aria-hidden="true"
           draggable={false}
           onError={() => setOtter(false)}
-          className="animate-otter pointer-events-none fixed right-6 bottom-6 h-[88px] w-auto max-w-[110px] rounded-2xl select-none"
+          className="animate-otter pointer-events-none fixed right-6 bottom-6 z-[45] h-[88px] w-auto max-w-[110px] rounded-2xl select-none"
         />
       )}
       <TopPillHeader
