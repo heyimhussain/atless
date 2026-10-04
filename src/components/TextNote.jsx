@@ -1,14 +1,112 @@
 import { Rnd } from "react-rnd";
-import { useState } from "react";
-import { GripHorizontal, Pencil, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { GripHorizontal, Loader2, Pencil, Square, Volume2, VolumeX, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 
-export default function TextNote({ tile, scale, selected, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop }) {
+const TTS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+// eleven_monolingual_v1 is legacy and likely retired (422s); multilingual_v2
+// is current. Switch back to "eleven_monolingual_v1" here if needed.
+const TTS_MODEL_ID = "eleven_multilingual_v2";
+
+export default function TextNote({ tile, scale, selected, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, notify }) {
   const [renaming, setRenaming] = useState(false);
+  const [ttsState, setTtsState] = useState("idle"); // idle | loading | playing | error
+  const [ttsMessage, setTtsMessage] = useState("");
+  const ttsAudioRef = useRef(null);
+  const ttsUrlRef = useRef(null);
+  const ttsTimerRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      if (ttsTimerRef.current) clearTimeout(ttsTimerRef.current);
+      try {
+        ttsAudioRef.current?.pause();
+      } catch {
+        /* noop */
+      }
+      if (ttsUrlRef.current) {
+        try {
+          URL.revokeObjectURL(ttsUrlRef.current);
+        } catch {
+          /* noop */
+        }
+      }
+    },
+    [],
+  );
 
   const commitName = (v) => {
     setRenaming(false);
     if (v !== null && v !== (tile.name || "")) onChange(tile.id, { name: v });
+  };
+
+  const speak = async (e) => {
+    e?.stopPropagation();
+    if (ttsState === "playing") {
+      try {
+        ttsAudioRef.current?.pause();
+      } catch {
+        /* noop */
+      }
+      setTtsState("idle");
+      return;
+    }
+    const text = (tile.text || "").trim();
+    if (!text || ttsState === "loading") return;
+    const key = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    if (!key) {
+      setTtsMessage("Missing VITE_ELEVENLABS_API_KEY — restart dev server after adding .env");
+      setTtsState("error");
+      ttsTimerRef.current = setTimeout(() => setTtsState("idle"), 4000);
+      return;
+    }
+    setTtsMessage("");
+    setTtsState("loading");
+    try {
+      const res = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${TTS_VOICE_ID}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": key,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify({ text, model_id: TTS_MODEL_ID }),
+        },
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          const msg =
+            errJson?.detail?.message || errJson?.detail || errJson?.message;
+          if (msg && typeof msg === "string") detail += ` — ${msg}`;
+          console.error("ElevenLabs TTS error:", res.status, errJson);
+        } catch {
+          console.error("ElevenLabs TTS error:", res.status);
+        }
+        setTtsMessage(detail);
+        setTtsState("error");
+        notify?.(`Read aloud failed (${detail})`);
+        ttsTimerRef.current = setTimeout(() => setTtsState("idle"), 4000);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      ttsUrlRef.current = url;
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.onended = () => setTtsState("idle");
+      audio.onerror = () => setTtsState("error");
+      setTtsState("playing");
+      await audio.play();
+    } catch {
+      setTtsMessage("Network error — check connection");
+      setTtsState("error");
+      notify?.("Read aloud failed (network error — check connection)");
+      ttsTimerRef.current = setTimeout(() => setTtsState("idle"), 4000);
+    }
   };
   return (
     <Rnd
@@ -76,6 +174,31 @@ export default function TextNote({ tile, scale, selected, onChange, onDelete, on
               <Pencil size={11} className="shrink-0 text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-stone-600" />
             )}
           </span>
+          <span className="flex shrink-0 items-center gap-0.5">
+          <button
+            aria-label={ttsState === "playing" ? "Stop preview" : "Read aloud"}
+            title={
+              ttsState === "playing"
+                ? "Stop"
+                : ttsState === "error" && ttsMessage
+                  ? `Read aloud failed (${ttsMessage})`
+                  : "Read aloud"
+            }
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={speak}
+            disabled={ttsState === "loading" || !(tile.text || "").trim()}
+            className="no-drag flex h-5 w-5 items-center justify-center rounded-full text-neutral-400 transition outline-none hover:bg-neutral-100 hover:text-stone-700 disabled:opacity-40 dark:text-stone-500 dark:hover:bg-white/10 dark:hover:text-stone-200"
+          >
+            {ttsState === "loading" ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : ttsState === "playing" ? (
+              <Square size={11} fill="currentColor" />
+            ) : ttsState === "error" ? (
+              <VolumeX size={13} className="text-red-500" />
+            ) : (
+              <Volume2 size={13} />
+            )}
+          </button>
           <button
             aria-label="Delete note"
             onMouseDown={(e) => e.stopPropagation()}
@@ -87,6 +210,7 @@ export default function TextNote({ tile, scale, selected, onChange, onDelete, on
           >
             <X size={13} strokeWidth={2.5} />
           </button>
+          </span>
         </div>
 
         {/* editable text — wraps and stays inside the tile */}

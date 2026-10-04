@@ -14,6 +14,9 @@ import {
   CircleHelp,
   Moon,
   Sun,
+  Sparkles,
+  Loader2,
+  Link2,
 } from "lucide-react";
 
 const THEME_KEY = "spatial-canvas-theme";
@@ -23,6 +26,7 @@ const HELP_ITEMS = [
   { icon: ZoomIn, combos: [["Scroll"]], desc: "Zoom in / out" },
   { icon: Type, combos: [["Double-click"]], desc: "New text note" },
   { icon: ImagePlus, combos: [["Drop files"]], desc: "Add image, video, audio" },
+  { icon: Link2, combos: [["Drop link"]], desc: "Embed YouTube video" },
   { icon: Mic, combos: [["Hold", "Space"], ["Toggle", "R"]], desc: "Record voice note" },
   { icon: BoxSelect, combos: [["Drag"]], desc: "Box select tiles" },
   { icon: MousePointerClick, combos: [["Ctrl", "Click"]], desc: "Multi-select" },
@@ -63,7 +67,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader() {
+export default function TopPillHeader({ onSummarize, summarizing }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [dark, setDark] = useState(
@@ -189,6 +193,20 @@ export default function TopPillHeader() {
         >
           <CircleHelp size={15} />
         </button>
+
+        <button
+          onClick={onSummarize}
+          disabled={summarizing}
+          aria-label="Summarize canvas with Gemini"
+          title="Summarize canvas with Gemini"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 outline-none transition-colors hover:bg-stone-900 hover:text-white disabled:opacity-60 sm:h-8 sm:w-8 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
+        >
+          {summarizing ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <Sparkles size={15} />
+          )}
+        </button>
       </div>
 
       {open && (
@@ -205,6 +223,9 @@ export default function TopPillHeader() {
             {HELP_ITEMS.map((item) => (
               <HelpItem key={item.desc} {...item} />
             ))}
+          </div>
+          <div className="mt-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
+            © 2026 Hussain Shah Hashmi - Designed with React & Vite.
           </div>
         </div>
       )}

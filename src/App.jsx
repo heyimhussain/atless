@@ -11,12 +11,18 @@ import TopPillHeader from "./components/TopPillHeader.jsx";
 import TextNote from "./components/TextNote.jsx";
 import MediaTile, { MEDIA_HEADER_H } from "./components/MediaTile.jsx";
 import AudioTile from "./components/AudioTile.jsx";
+import SummaryTile from "./components/SummaryTile.jsx";
 
 const NOTE_W = 230;
 const NOTE_H = 170;
 const MEDIA_MAX = 360;
 const AUDIO_W = 260;
 const AUDIO_H = 132;
+const SUM_W = 300;
+const SUM_H = 220;
+// Current model per Google (gemini-2.0-flash was retired); change here
+// if the lineup moves again.
+const GEMINI_MODEL = "gemini-3.8-flash";
 
 function fitBox(nw, nh, max = MEDIA_MAX) {
   if (!nw || !nh) return { w: 320, h: 240 };
@@ -44,6 +50,90 @@ function probeVideoSize(url) {
     v.onerror = () => resolve({ w: 360, h: 240 });
     v.src = url;
   });
+}
+
+// Shrink oversized stills before embedding so autosave stays under the
+// ~5MB localStorage quota. GIF/SVG pass through untouched (animation/vector).
+function processImageForStorage(dataUrl, file) {
+  const t = (file.type || "").toLowerCase();
+  const n = (file.name || "").toLowerCase();
+  if (t === "image/gif" || /\.gif$/.test(n)) return Promise.resolve(dataUrl);
+  if (t === "image/svg+xml" || /\.svg$/.test(n)) return Promise.resolve(dataUrl);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX = 1600;
+        const w = img.naturalWidth || 0;
+        const h = img.naturalHeight || 0;
+        if (!w || !h || Math.max(w, h) <= MAX) {
+          resolve(dataUrl);
+          return;
+        }
+        const s = MAX / Math.max(w, h);
+        const c = document.createElement("canvas");
+        c.width = Math.round(w * s);
+        c.height = Math.round(h * s);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        // Keep alpha-capable formats lossless; photos go to JPEG.
+        const outMime =
+          t === "image/png" || t === "image/webp" ? t : "image/jpeg";
+        resolve(c.toDataURL(outMime, 0.9));
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function isQuotaError(err) {
+  return (
+    !!err &&
+    (err.name === "QuotaExceededError" || err.code === 22 || err.code === 1014)
+  );
+}
+
+// Strip markdown/formatting residue so AI summaries render as one clean
+// plain-text paragraph: headings, quotes, list markers, rules, bold,
+// italics, and inline code are unwrapped, then everything joins up.
+function cleanSummaryText(raw) {
+  const lines = String(raw || "")
+    .replace(/\r/g, "")
+    .replace(/```[a-z]*\n?/gi, "")
+    .replace(/```/g, "")
+    .split("\n");
+  const cleaned = [];
+  for (let line of lines) {
+    let l = line.trim();
+    if (!l) continue;
+    l = l.replace(/^#{1,6}\s+/, ""); // ### Heading → Heading
+    l = l.replace(/^>\s?/, ""); // > quote → quote
+    l = l.replace(/^([-*•]|\d+[.)])\s+/, ""); // - item / 1. item → item
+    if (/^(-{3,}|_{3,}|\*{3,})$/.test(l)) continue; // ---- rules
+    l = l.replace(/(\*\*|__)(.*?)\1/g, "$2"); // **bold** → bold
+    l = l.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?;:]|$)/g, "$1$2"); // *it* → it
+    l = l.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, "$1$2"); // _it_ → it
+    l = l.replace(/`([^`\n]+)`/g, "$1"); // `code` → code
+    l = l.replace(/[*_]{2,}/g, ""); // leftover doubles
+    l = l.replace(/^[*_~>]+\s*/, ""); // leading markers
+    l = l.replace(/#{1,}/g, ""); // stray hashes
+    l = l.replace(/`/g, ""); // stray backticks
+    l = l.trim();
+    if (l) cleaned.push(l);
+  }
+  return cleaned.join(" ").replace(/\s{2,}/g, " ").trim();
+}
+
+// Extract a YouTube video ID from watch / share / shorts / live / embed URLs.
+function parseYouTubeUrl(text) {
+  const str = (text || "").trim();
+  if (!str) return null;
+  const m = str.match(
+    /(?:youtube\.com\/(?:watch\?[^#\s]*v=|shorts\/|live\/|embed\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/,
+  );
+  return m ? m[1] : null;
 }
 
 function kindOf(file) {
@@ -90,7 +180,9 @@ function loadTiles() {
           (t.type === "text" ||
             t.type === "image" ||
             t.type === "video" ||
-            t.type === "audio"),
+            t.type === "audio" ||
+            t.type === "youtube" ||
+            t.type === "summary"),
       )
       .map((t, i) => ({
         id: typeof t.id === "string" ? t.id : `restored-${Date.now()}-${i}`,
@@ -107,6 +199,7 @@ function loadTiles() {
               ? +t.h
               : 160,
         text: typeof t.text === "string" ? t.text : "",
+        transcript: typeof t.transcript === "string" ? t.transcript : "",
         src: typeof t.src === "string" ? t.src : undefined,
         // Legacy text notes were saved with name "text" — treat as unnamed.
         name:
@@ -138,6 +231,7 @@ function CanvasSurface({
   onTileDragStart,
   onTileDrag,
   onTileDragStop,
+  notify,
 }) {
   const ctx = useTransformContext();
   const controls = useControls();
@@ -180,12 +274,16 @@ function CanvasSurface({
           onTileDragStart,
           onTileDrag,
           onTileDragStop,
+          notify,
         };
         if (tile.type === "text") {
           return <TextNote key={tile.id} {...common} />;
         }
         if (tile.type === "audio") {
           return <AudioTile key={tile.id} {...common} />;
+        }
+        if (tile.type === "summary") {
+          return <SummaryTile key={tile.id} {...common} />;
         }
         return <MediaTile key={tile.id} {...common} />;
       })}
@@ -227,6 +325,8 @@ export default function App() {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   // Snapshot of group positions taken when a tile drag starts.
   const groupDragRef = useRef(null);
+  // Remembers the last quota warning so an oversized canvas warns once.
+  const persistWarnRef = useRef(null);
 
   const selectOnly = useCallback((id) => {
     selectedRef.current = [id];
@@ -302,34 +402,9 @@ export default function App() {
     setMatchIdx(-1);
   }, []);
 
-  // Runs on tile mousedown (bubbles up from the drag handle — never blocked,
-  // so Rnd still receives it). Ctrl/Cmd toggles, otherwise select exclusively.
-  const handleTileMouseDown = useCallback(
-    (id, e) => {
-      if (e.target.closest?.(".no-drag")) return;
-      if (e.ctrlKey || e.metaKey) toggleSelect(id);
-      else if (!selectedRef.current.includes(id)) selectOnly(id);
-    },
-    [toggleSelect, selectOnly],
-  );
-
   const nextId = useCallback((prefix) => {
     idRef.current += 1;
     return `${prefix}-${Date.now()}-${idRef.current}`;
-  }, []);
-
-  // Fires on every pan / zoom — keeps the tile drag scale and
-  // viewport-center math in sync with the real transform.
-  // (The dot grid itself syncs via a direct DOM subscription instead,
-  // so it never lags behind smooth animations.)
-  const handleTransform = useCallback((ref, state) => {
-    const s = state ?? ref?.state;
-    if (!s || typeof s.scale !== "number") return;
-    // Guard float noise so pure pans don't re-render the whole tile tree.
-    setScale((prev) => (Math.abs(prev - s.scale) > 1e-9 ? s.scale : prev));
-    viewRef.current.positionX = s.positionX ?? 0;
-    viewRef.current.positionY = s.positionY ?? 0;
-    viewRef.current.scale = s.scale;
   }, []);
 
   const clientToContent = useCallback((clientX, clientY) => {
@@ -352,6 +427,175 @@ export default function App() {
       x: (clientX - rect.left - state.positionX) / state.scale,
       y: (clientY - rect.top - state.positionY) / state.scale,
     };
+  }, []);
+
+  // ---- lightweight toast (empty-canvas nudge, API errors) ----
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+
+  const showToast = useCallback((msg, ms = 3000) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
+  }, []);
+
+  // ---- Gemini canvas summarizer ----
+  const [summarizing, setSummarizing] = useState(false);
+
+  const summarizeCanvas = useCallback(async () => {
+    if (summarizing) return;
+    const lines = [];
+    const imageParts = [];
+    for (const t of tilesRef.current) {
+      if (t.type === "text") {
+        const body = (t.text || "").trim();
+        const label = (t.name || "").trim();
+        if (body || label) {
+          lines.push(`- Text note${label ? ` "${label}"` : ""}: ${body || "(empty)"}`);
+        }
+      } else if (t.type === "audio") {
+        const tr = (t.transcript || "").trim();
+        const label = (t.name || "Voice note").trim();
+        if (tr) lines.push(`- Audio "${label}" transcript: ${tr}`);
+        else lines.push(`- Audio clip titled "${label}" (not transcribed)`);
+      } else if (t.type === "image") {
+        const label = (t.name || "").trim();
+        // Attach supported stills directly (PNG/JPEG/WEBP, capped); GIF/SVG
+        // and oversized payloads fall back to text context only.
+        if (typeof t.src === "string") {
+          const m = t.src.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/s);
+          if (m && imageParts.length < 12) {
+            let mime = m[1].toLowerCase();
+            if (mime === "image/jpg") mime = "image/jpeg";
+            if (m[3].length <= 14000000) {
+              imageParts.push({ inline_data: { mime_type: mime, data: m[3] } });
+            }
+          }
+        }
+        if (label) lines.push(`- Image "${label}"`);
+        else lines.push(`- An attached image (see image parts for visual content)`);
+      } else if (t.type === "video") {
+        const label = (t.name || "").trim();
+        if (label) lines.push(`- Video: ${label}`);
+      } else if (t.type === "youtube") {
+        const label = (t.name || "").trim();
+        const url = t.src
+          ? `https://www.youtube.com/watch?v=${t.src}`
+          : "(no link)";
+        lines.push(`- YouTube video${label ? ` "${label}"` : ""}: ${url}`);
+      } else if (t.type === "summary") {
+        const body = (t.text || "").trim();
+        if (body) lines.push(`- Previous summary: ${body}`);
+      }
+    }
+    if (lines.length === 0) {
+      showToast("Add some notes first to summarize!");
+      return;
+    }
+    const key = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!key) {
+      showToast("Missing VITE_GEMINI_API_KEY — restart dev server after adding .env", 4000);
+      return;
+    }
+    setSummarizing(true);
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: {
+              parts: [
+                {
+                  text: "You are a spatial canvas AI assistant. Analyze all provided media—including text notes, audio transcriptions, image contents, and video references. Synthesize a structured executive summary highlighting connections across all visual and textual elements on the canvas. Respond in one plain-text paragraph with no markdown, headings, lists, bold, italics, quotes, code, or symbols such as #, *, >, -, _, or backticks — plain sentences only.",
+                },
+              ],
+            },
+            contents: [{ parts: [...imageParts, { text: lines.join("\n") }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+          }),
+        },
+      );
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          const msg = errJson?.error?.message;
+          if (msg && typeof msg === "string") detail += ` — ${msg}`;
+          console.error("Gemini summary error:", res.status, errJson);
+        } catch {
+          console.error("Gemini summary error:", res.status);
+        }
+        throw new Error(detail);
+      }
+      const json = await res.json();
+      const summary = cleanSummaryText(
+        ((json?.candidates?.[0]?.content?.parts || []))
+          .map((p) => p?.text || "")
+          .join(""),
+      );
+      if (!summary) {
+        showToast("Gemini returned an empty summary");
+        return;
+      }
+      const wrapper =
+        viewRef.current.wrapper ?? instanceRef.current?.wrapperComponent;
+      let cx = 0;
+      let cy = 0;
+      if (wrapper) {
+        const rect = wrapper.getBoundingClientRect();
+        const p = clientToContent(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        cx = p.x;
+        cy = p.y;
+      }
+      setTiles((prev) => [
+        ...prev,
+        {
+          id: nextId("summary"),
+          type: "summary",
+          x: cx - SUM_W / 2,
+          y: cy - SUM_H / 2,
+          w: SUM_W,
+          h: SUM_H,
+          text: summary,
+          name: "Gemini Synthesis",
+        },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Summary failed (${msg || "network error"})`, 4000);
+    } finally {
+      setSummarizing(false);
+    }
+  }, [summarizing, showToast, clientToContent, nextId]);
+
+  // Runs on tile mousedown (bubbles up from the drag handle — never blocked,
+  // so Rnd still receives it). Ctrl/Cmd toggles, otherwise select exclusively.
+  const handleTileMouseDown = useCallback(
+    (id, e) => {
+      if (e.target.closest?.(".no-drag")) return;
+      if (e.ctrlKey || e.metaKey) toggleSelect(id);
+      else if (!selectedRef.current.includes(id)) selectOnly(id);
+    },
+    [toggleSelect, selectOnly],
+  );
+
+  // Fires on every pan / zoom — keeps the tile drag scale and
+  // viewport-center math in sync with the real transform.
+  // (The dot grid itself syncs via a direct DOM subscription instead,
+  // so it never lags behind smooth animations.)
+  const handleTransform = useCallback((ref, state) => {
+    const s = state ?? ref?.state;
+    if (!s || typeof s.scale !== "number") return;
+    // Guard float noise so pure pans don't re-render the whole tile tree.
+    setScale((prev) => (Math.abs(prev - s.scale) > 1e-9 ? s.scale : prev));
+    viewRef.current.positionX = s.positionX ?? 0;
+    viewRef.current.positionY = s.positionY ?? 0;
+    viewRef.current.scale = s.scale;
   }, []);
 
   const viewportCenterContent = useCallback(() => {
@@ -417,6 +661,9 @@ export default function App() {
         } catch {
           continue;
         }
+        if (kind === "image") {
+          url = await processImageForStorage(url, file);
+        }
         let w;
         let h;
         let ratio;
@@ -455,6 +702,31 @@ export default function App() {
           },
         ]);
       }
+    },
+    [nextId],
+  );
+
+  const addYouTubeTile = useCallback(
+    (videoId, pageUrl, baseX, baseY) => {
+      const shorts = /\/shorts\//.test(pageUrl || "");
+      const mediaW = shorts ? 240 : 360;
+      const mediaH = Math.round(mediaW * (shorts ? 16 / 9 : 9 / 16));
+      const w = mediaW;
+      const h = mediaH + MEDIA_HEADER_H;
+      setTiles((prev) => [
+        ...prev,
+        {
+          id: nextId("youtube"),
+          type: "youtube",
+          x: baseX - w / 2,
+          y: baseY - h / 2,
+          w,
+          h,
+          ratio: shorts ? 9 / 16 : 16 / 9,
+          src: videoId,
+          name: "YouTube video",
+        },
+      ]);
     },
     [nextId],
   );
@@ -580,9 +852,27 @@ export default function App() {
     const onDrop = (e) => {
       e.preventDefault();
       const files = Array.from(e.dataTransfer?.files ?? []).filter(Boolean);
-      if (files.length === 0) return;
       const p = clientToContent(e.clientX, e.clientY);
-      void addMediaTiles(files, p.x, p.y);
+      if (files.length > 0) {
+        void addMediaTiles(files, p.x, p.y);
+        return;
+      }
+      // Link drops (e.g. dragged from the address bar) carry URL text.
+      const raw =
+        e.dataTransfer?.getData("text/uri-list") ||
+        e.dataTransfer?.getData("text/plain") ||
+        "";
+      const first = raw
+        .split(/[\r\n]+/)
+        .map((s) => s.trim())
+        .find(Boolean);
+      if (!first) return;
+      const ytId = parseYouTubeUrl(first);
+      if (ytId) {
+        addYouTubeTile(ytId, first, p.x, p.y);
+      } else if (/^https?:\/\//i.test(first)) {
+        showToast("Only YouTube links can be embedded for now", 2500);
+      }
     };
     window.addEventListener("dragover", onDragOver);
     window.addEventListener("drop", onDrop);
@@ -590,7 +880,7 @@ export default function App() {
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("drop", onDrop);
     };
-  }, [addMediaTiles, clientToContent]);
+  }, [addMediaTiles, addYouTubeTile, clientToContent, showToast]);
 
   const deleteTile = useCallback((id) => {
     if (selectedRef.current.includes(id)) {
@@ -693,12 +983,51 @@ export default function App() {
   }, [deleteSelected]);
 
   // Persist every tiles update (debounced) so notes survive refreshes.
+  // Media embeds can exceed the ~5MB localStorage quota — in that case drop
+  // the heaviest payloads first so text, names, and layout always survive.
   useEffect(() => {
     const t = setTimeout(() => {
+      const save = (list) => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      };
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tiles));
+        save(tiles);
+        persistWarnRef.current = null;
+        return;
       } catch (err) {
-        console.warn("Could not persist canvas tiles:", err);
+        if (!isQuotaError(err)) {
+          console.warn("Could not persist canvas tiles:", err);
+          return;
+        }
+      }
+      const slim = tiles.map((x) => ({ ...x }));
+      const withSrc = slim
+        .filter((x) => typeof x.src === "string" && x.src.length > 0)
+        .sort((a, b) => b.src.length - a.src.length);
+      const dropped = [];
+      let saved = withSrc.length === 0;
+      for (const cand of withSrc) {
+        delete cand.src;
+        dropped.push(cand.id);
+        try {
+          save(slim);
+          saved = true;
+          break;
+        } catch {
+          continue;
+        }
+      }
+      const key = saved ? dropped.join(",") : "failed";
+      if (persistWarnRef.current === key) return;
+      persistWarnRef.current = key;
+      if (!saved) {
+        console.warn(
+          "Canvas too large to persist — even notes could not be saved.",
+        );
+      } else {
+        console.warn(
+          `Canvas exceeded storage quota — ${dropped.length} media file(s) excluded from autosave; notes and layout preserved.`,
+        );
       }
     }, 250);
     return () => clearTimeout(t);
@@ -877,7 +1206,7 @@ export default function App() {
         aria-hidden="true"
         className="dot-grid-layer pointer-events-none absolute inset-0"
       />
-      <TopPillHeader />
+      <TopPillHeader onSummarize={summarizeCanvas} summarizing={summarizing} />
 
       {searchOpen && (
         <div className="absolute top-20 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/60 bg-white/80 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85 dark:ring-white/10">
@@ -967,6 +1296,7 @@ export default function App() {
               onTileDragStart={handleTileDragStart}
               onTileDrag={handleTileDrag}
               onTileDragStop={handleTileDragStop}
+              notify={showToast}
             />
           </TransformComponent>
         </TransformWrapper>
@@ -981,6 +1311,12 @@ export default function App() {
           <p className="text-sm text-neutral-400 dark:text-stone-500">
             double-click anywhere to begin.
           </p>
+        </div>
+      )}
+
+      {toast && (
+        <div className="absolute bottom-20 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 rounded-full border border-neutral-200 bg-white/90 px-4 py-2 text-xs whitespace-nowrap text-stone-700 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/90 dark:text-stone-200">
+          {toast}
         </div>
       )}
 
@@ -1018,9 +1354,6 @@ export default function App() {
         </div>
       )}
 
-      <footer className="pointer-events-none absolute right-4 bottom-3 z-50 text-[11px] tracking-tight text-neutral-400 dark:text-stone-500">
-        © 2026 – Built with React/JS
-      </footer>
     </div>
   );
 }

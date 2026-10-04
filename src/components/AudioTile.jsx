@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
-import { GripHorizontal, X, Play, Pause, Mic, Pencil } from "lucide-react";
+import { GripHorizontal, X, Play, Pause, Mic, Pencil, FileText, FileWarning, Loader2 } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 
 function fmt(s) {
@@ -16,10 +16,68 @@ export default function AudioTile({ tile, scale, selected, onChange, onDelete, o
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [renaming, setRenaming] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [sttError, setSttError] = useState(null);
 
   const commitName = (v) => {
     setRenaming(false);
     if (v !== null && v !== (tile.name || "")) onChange(tile.id, { name: v });
+  };
+
+  const transcribe = async (e) => {
+    e?.stopPropagation();
+    if (transcribing || !tile.src) return;
+    const key = import.meta.env.VITE_ELEVENLABS_API_KEY;
+    if (!key) {
+      setSttError("Missing API key");
+      return;
+    }
+    setTranscribing(true);
+    setSttError(null);
+    try {
+      const blob = await (await fetch(tile.src)).blob();
+      const ext = blob.type.includes("mp4") || blob.type.includes("m4a")
+        ? "m4a"
+        : blob.type.includes("mpeg") || blob.type.includes("mp3")
+          ? "mp3"
+          : blob.type.includes("wav")
+            ? "wav"
+            : blob.type.includes("ogg") || blob.type.includes("opus")
+              ? "ogg"
+              : "webm";
+      const form = new FormData();
+      form.append("file", blob, `${tile.name || "recording"}.${ext}`);
+      form.append("model_id", "scribe_v2");
+      const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+        method: "POST",
+        headers: { "xi-api-key": key },
+        body: form,
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          const msg =
+            errJson?.detail?.message || errJson?.detail || errJson?.message;
+          if (msg && typeof msg === "string") detail += ` — ${msg}`;
+          console.error("ElevenLabs STT error:", res.status, errJson);
+        } catch {
+          console.error("ElevenLabs STT error:", res.status);
+        }
+        throw new Error(detail);
+      }
+      const json = await res.json();
+      const text = (json?.text || "").trim();
+      onChange(tile.id, {
+        transcript: text,
+        h: Math.max(tile.h || 0, 200),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSttError(`Transcription failed (${msg || "network error"})`);
+    } finally {
+      setTranscribing(false);
+    }
   };
 
   useEffect(() => {
@@ -129,6 +187,21 @@ export default function AudioTile({ tile, scale, selected, onChange, onDelete, o
               <Pencil size={11} className="shrink-0 text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-stone-600" />
             )}
           </span>
+          <span className="flex shrink-0 items-center gap-0.5">
+          <button
+            aria-label="Transcribe audio"
+            title="Transcribe"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={transcribe}
+            disabled={transcribing || !tile.src}
+            className="no-drag flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-400 transition outline-none hover:bg-neutral-100 hover:text-stone-700 disabled:opacity-60 dark:text-stone-500 dark:hover:bg-white/10 dark:hover:text-stone-200"
+          >
+            {transcribing ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <FileText size={13} />
+            )}
+          </button>
           <button
             aria-label="Delete audio"
             onMouseDown={(e) => e.stopPropagation()}
@@ -140,8 +213,17 @@ export default function AudioTile({ tile, scale, selected, onChange, onDelete, o
           >
             <X size={13} strokeWidth={2.5} />
           </button>
+          </span>
         </div>
 
+        {!tile.src ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-3 text-center">
+            <FileWarning size={18} className="shrink-0 text-neutral-300 dark:text-stone-600" />
+            <span className="text-[11px] leading-snug text-neutral-400 dark:text-stone-500">
+              Audio too large to auto-save on this device
+            </span>
+          </div>
+        ) : (
         <div className="flex min-h-0 flex-1 items-center gap-3 px-3">
           <button
             aria-label={playing ? "Pause" : "Play"}
@@ -178,6 +260,22 @@ export default function AudioTile({ tile, scale, selected, onChange, onDelete, o
             </div>
           </div>
         </div>
+        )}
+
+        {tile.transcript ? (
+          <div className="no-drag max-h-20 min-h-0 shrink-0 overflow-y-auto border-t border-neutral-100 px-3 py-1.5 text-[11px] leading-snug break-words whitespace-pre-wrap text-stone-600 dark:border-white/10 dark:text-stone-300">
+            {tile.transcript}
+          </div>
+        ) : transcribing ? (
+          <div className="flex shrink-0 items-center gap-1.5 border-t border-neutral-100 px-3 py-1.5 text-[11px] text-neutral-400 dark:border-white/10 dark:text-stone-500">
+            <Loader2 size={12} className="animate-spin" />
+            Transcribing…
+          </div>
+        ) : sttError ? (
+          <div className="shrink-0 border-t border-neutral-100 px-3 py-1.5 text-[11px] text-red-500 dark:border-white/10">
+            {sttError}
+          </div>
+        ) : null}
 
         <audio
           ref={audioRef}

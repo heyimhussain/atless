@@ -1,6 +1,6 @@
 import { Rnd } from "react-rnd";
 import { useState } from "react";
-import { GripHorizontal, Pencil, X } from "lucide-react";
+import { GripHorizontal, ImageOff, Pencil, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 
 // Height of the tile's top drag-handle bar. The media area keeps the exact
@@ -10,6 +10,7 @@ export const MEDIA_HEADER_H = 28;
 
 export default function MediaTile({ tile, scale, selected, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop }) {
   const isVideo = tile.type === "video";
+  const isYouTube = tile.type === "youtube";
   const [renaming, setRenaming] = useState(false);
 
   const commitName = (v) => {
@@ -46,7 +47,8 @@ export default function MediaTile({ tile, scale, selected, onChange, onDelete, o
         });
       }}
       // stacking order: text (40) > audio (30) > video (20) > photo (10)
-      style={{ zIndex: tile.type === "video" ? 20 : 10 }}
+      // stacking order: text (40) > audio (30) > video (20) > photo (10)
+      style={{ zIndex: tile.type === "image" ? 10 : 20 }}
     >
       <div
         className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white transition-shadow duration-150 dark:bg-stone-900 ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
@@ -89,22 +91,39 @@ export default function MediaTile({ tile, scale, selected, onChange, onDelete, o
         </div>
 
         <div className="min-h-0 w-full flex-1 bg-neutral-100 dark:bg-black/50">
-          {isVideo ? (
-            <video
-              src={tile.src}
-              controls
-              preload="metadata"
-              className="no-drag h-full w-full object-cover"
-              onMouseDown={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => e.stopPropagation()}
-            />
+          {tile.src ? (
+            isYouTube ? (
+              <iframe
+                src={`https://www.youtube.com/embed/${tile.src}`}
+                title={tile.name || "YouTube video"}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="no-drag h-full w-full bg-black select-none"
+              />
+            ) : isVideo ? (
+              <video
+                src={tile.src}
+                controls
+                preload="metadata"
+                className="no-drag h-full w-full object-cover"
+                onMouseDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <img
+                src={tile.src}
+                alt={tile.name || "canvas image"}
+                draggable={false}
+                className="h-full w-full object-cover select-none"
+              />
+            )
           ) : (
-            <img
-              src={tile.src}
-              alt={tile.name || "canvas image"}
-              draggable={false}
-              className="h-full w-full object-cover select-none"
-            />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-3 text-center">
+              <ImageOff size={18} className="shrink-0 text-neutral-300 dark:text-stone-600" />
+              <span className="text-[11px] leading-snug text-neutral-400 dark:text-stone-500">
+                Media too large to auto-save on this device
+              </span>
+            </div>
           )}
         </div>
       </div>
