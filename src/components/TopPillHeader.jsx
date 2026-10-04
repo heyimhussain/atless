@@ -78,7 +78,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader({ onSummarize, summarizing, onShare, sharing, tiles = [], connections = [], onFocusConnection }) {
+export default function TopPillHeader({ onSummarize, summarizing, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [dark, setDark] = useState(
@@ -182,6 +182,27 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
     } catch {
       /* noop */
+    }
+  };
+
+  // Easter egg: the T, R, and final S of "StormHacks" in the credits are
+  // live buttons. Click all three to summon the otter; click any of them
+  // again to dismiss it. Zero visual hint — that's the point.
+  const EGG_INDICES = [1, 3, 9];
+  const [eggLetters, setEggLetters] = useState([]);
+  const handleEgg = (i) => {
+    if (otterOn) {
+      onOtterChange?.(false);
+      setEggLetters([]);
+      return;
+    }
+    if (eggLetters.includes(i)) return;
+    const next = [...eggLetters, i];
+    if (next.length === EGG_INDICES.length) {
+      setEggLetters([]);
+      onOtterChange?.(true);
+    } else {
+      setEggLetters(next);
     }
   };
 
@@ -303,7 +324,24 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
           <div className="mt-1 flex items-center justify-center gap-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
             <span>© 2026 Hussain Shah Hashmi - Made with</span>
             <Heart size={11} fill="currentColor" className="shrink-0" />
-            <span>for StormHacks 2026</span>
+            <span>
+              for{" "}
+              {"StormHacks".split("").map((ch, i) =>
+                EGG_INDICES.includes(i) ? (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleEgg(i)}
+                    className="cursor-pointer focus:outline-none"
+                  >
+                    {ch}
+                  </button>
+                ) : (
+                  <Fragment key={i}>{ch}</Fragment>
+                ),
+              )}{" "}
+              2026
+            </span>
           </div>
         </div>
       )}

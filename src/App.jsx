@@ -903,6 +903,24 @@ export default function App() {
   // ---- shareable canvas links (Worker + Tiger Data, editable copy) ----
   const [sharing, setSharing] = useState(false);
 
+  // Easter-egg otter (unlocked via the credits in the shortcut menu).
+  // Persisted so it survives refreshes; missing gif fails silently.
+  const [otterOn, setOtterOn] = useState(() => {
+    try {
+      return localStorage.getItem("atless-otter") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const setOtter = useCallback((v) => {
+    setOtterOn(v);
+    try {
+      localStorage.setItem("atless-otter", v ? "1" : "0");
+    } catch {
+      /* noop */
+    }
+  }, []);
+
   const shareCanvas = useCallback(async () => {
     if (sharing) return;
     const api = import.meta.env.VITE_SHARE_API_URL;
@@ -2354,11 +2372,26 @@ export default function App() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
+      {/* Easter-egg otter: viewport-anchored bottom-right, painted before the
+          tile layer so it lives in the background, never intercepting clicks.
+          Drop the gif at public/otter.gif — without it this renders nothing. */}
+      {otterOn && (
+        <img
+          src={`${import.meta.env.BASE_URL}otter.gif`}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          onError={() => setOtter(false)}
+          className="animate-otter pointer-events-none fixed right-6 bottom-6 h-44 w-auto max-w-[220px] rounded-2xl select-none"
+        />
+      )}
       <TopPillHeader
         onSummarize={summarizeCanvas}
         summarizing={summarizing}
         onShare={shareCanvas}
         sharing={sharing}
+        otterOn={otterOn}
+        onOtterChange={setOtter}
         tiles={tiles}
         connections={connections}
         onFocusConnection={focusConnection}
