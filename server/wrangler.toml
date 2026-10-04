@@ -8,4 +8,4 @@ compatibility_date = "2026-10-01"
 # (DATABASE_URL=..., git-ignored) — see server/README.md.
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "REPLACE_WITH_HYPERDRIVE_ID"
+id = "6c0457deef2944d7a961d08cc9974c10"

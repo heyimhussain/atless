@@ -133,7 +133,24 @@ export default {
         const rows =
           await sql`select payload from shares where id = ${m[1]} limit 1`;
         if (rows.length === 0) return bad("Share not found.", 404);
-        return json(rows[0].payload);
+        // The driver may hand jsonb back as text — normalize to an object
+        // before re-encoding so clients always get { tiles, connections }.
+        let payload = rows[0].payload;
+        if (typeof payload === "string") {
+          try {
+            payload = JSON.parse(payload);
+          } catch {
+            return bad("Share not found.", 404);
+          }
+        }
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          !Array.isArray(payload.tiles) ||
+          !Array.isArray(payload.connections)
+        )
+          return bad("Share not found.", 404);
+        return json(payload);
       }
       return bad("Not found.", 404);
     } catch (err) {
