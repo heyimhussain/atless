@@ -47,7 +47,6 @@ export default function MediaTile({ tile, scale, selected, leaving, onChange, on
         });
       }}
       // stacking order: text (40) > audio (30) > video (20) > photo (10)
-      // stacking order: text (40) > audio (30) > video (20) > photo (10)
       style={{ zIndex: tile.type === "image" ? 10 : 20 }}
     >
       <div

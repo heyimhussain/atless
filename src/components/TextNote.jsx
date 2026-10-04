@@ -2,9 +2,11 @@ import { Rnd } from "react-rnd";
 import { useState } from "react";
 import { GripHorizontal, Pencil, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
+import { textTileFirstWord } from "../lib/tileName.js";
 
 export default function TextNote({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
   const [renaming, setRenaming] = useState(false);
+  const fallbackName = textTileFirstWord(tile);
 
   const commitName = (v) => {
     setRenaming(false);
@@ -71,9 +73,9 @@ export default function TextNote({ tile, scale, selected, leaving, onChange, onD
             <GripHorizontal size={14} className="shrink-0" />
             {renaming ? (
               <TileName name={tile.name} placeholder="Name…" onCommit={commitName} />
-            ) : tile.name ? (
+            ) : tile.name || fallbackName ? (
               <span className="min-w-0 max-w-[140px] truncate font-display text-[11px] font-medium text-neutral-400 dark:text-stone-500">
-                {tile.name}
+                {tile.name || fallbackName}
               </span>
             ) : (
               <NameHint />

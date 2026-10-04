@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { tileDisplayName } from "../lib/tileName.js";
 import {
   MousePointer2,
   ZoomIn,
@@ -20,6 +21,7 @@ import {
   Sparkles,
   Loader2,
   Link2,
+  X,
 } from "lucide-react";
 
 const THEME_KEY = "spatial-canvas-theme";
@@ -31,28 +33,18 @@ const HELP_ITEMS = [
   { icon: ImagePlus, combos: [["Drop files"]], desc: "Add image, video, audio" },
   { icon: Link2, combos: [["Drop link"]], desc: "Embed YouTube video" },
   { icon: Mic, combos: [["Hold", "Space"], ["Toggle", "R"]], desc: "Record voice note" },
-  { icon: BoxSelect, combos: [["Drag"]], desc: "Box select tiles" },
-  { icon: MousePointerClick, combos: [["Ctrl", "Click"]], desc: "Multi-select" },
+  { icon: BoxSelect, combos: [["Drag"]], desc: "Box select tiles + links" },
+  { icon: MousePointerClick, combos: [["Ctrl", "Click"]], desc: "Multi-select tiles / links" },
   { icon: Layers, combos: [["Ctrl", "A"]], desc: "Select all tiles" },
   { icon: Trash2, combos: [["Del"]], desc: "Delete selected" },
   { icon: Search, combos: [["Ctrl", "F"]], desc: "Search tiles" },
   { icon: Pencil, combos: [["Double-click", "Title"]], desc: "Rename tile" },
   { icon: Spline, combos: [["Right-click"], ["Connect"]], desc: "Link tiles with an arrow" },
+  { icon: X, combos: [["Esc"]], desc: "Cancel connection / close menus" },
 ];
 
 function connTileName(t) {
-  if (!t) return "?";
-  if (t.name) return t.name;
-  return (
-    {
-      text: "Text note",
-      image: "Image",
-      video: "Video",
-      audio: "Voice note",
-      youtube: "YouTube",
-      summary: "Summary",
-    }[t.type] || t.type
-  );
+  return tileDisplayName(t);
 }
 
 function HelpItem({ icon: Icon, combos, desc }) {

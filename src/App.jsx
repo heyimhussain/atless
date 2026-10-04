@@ -391,8 +391,10 @@ function CanvasSurface({
     // Zero-size anchor: tiles are absolutely positioned, so the transform
     // layer stays tiny and pans at full framerate (no giant texture).
     <div className="relative h-0 w-0">
-      {/* Connection arrows: rendered under tiles, paths recomputed from
-          live tile geometry every render so they track drags. */}
+      {/* Connection arrows: above photos (10) and videos (20) so links are
+          never hidden behind media, below audio (30) and text (40) so they
+          don't cross readable content. Paths recompute from live tile
+          geometry every render so they track drags. */}
       <svg
         aria-hidden="true"
         className="pointer-events-none absolute"
@@ -402,6 +404,7 @@ function CanvasSurface({
           width: bb.w,
           height: bb.h,
           overflow: "visible",
+          zIndex: 25,
         }}
       >
         <defs>
@@ -531,6 +534,8 @@ export default function App() {
   const selectedRef = useRef([]);
   const tilesRef = useRef(tiles);
   tilesRef.current = tiles;
+  const connListRef = useRef(connections);
+  connListRef.current = connections;
   const marqueeRef = useRef(null);
   const [marqueeBox, setMarqueeBox] = useState(null);
   // Pan mode indicator — grab cursor only while Shift is held.
@@ -1389,7 +1394,16 @@ export default function App() {
         : hit;
       selectedRef.current = next;
       setSelectedIds(next);
-      clearConnSelection();
+      // Links whose both endpoints land in the box get selected too.
+      const hitSet = new Set(hit);
+      const hitConns = connListRef.current
+        .filter((c) => hitSet.has(c.from) && hitSet.has(c.to))
+        .map((c) => c.id);
+      const nextConns = m.ctrl
+        ? Array.from(new Set([...selectedConnRef.current, ...hitConns]))
+        : hitConns;
+      selectedConnRef.current = nextConns;
+      setSelectedConnIds(nextConns);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -1397,7 +1411,7 @@ export default function App() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [clientToContent, clearSelection, clearConnSelection]);
+  }, [clientToContent, clearSelection]);
 
   // File drops work anywhere in the window — no bounded drop zone,
   // no highlight overlay. preventDefault also stops the browser

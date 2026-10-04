@@ -1,11 +1,9 @@
-# Atless — more productivity, less clutter.
+# <img src="public/favicon.svg" alt="Atless logo" width="28" height="28"> Atless — more productivity, less clutter.
 
 Atless is an infinite spatial canvas for collecting what's on your mind:
 typed notes, images, videos, YouTube embeds, voice recordings with
 transcripts, and AI-generated summaries — all as movable, resizable tiles
 on a pannable, zoomable board that persists across visits.
-
-![Atless canvas](public/favicon.svg)
 
 ## Features
 
@@ -17,7 +15,8 @@ on a pannable, zoomable board that persists across visits.
 | YouTube | Drag in any watch / share / Shorts / live link for a playable embed |
 | Voice notes | Hold `Space` or toggle `R` to record; custom player, ElevenLabs transcription, download |
 | AI summaries | One-click Gemini synthesis of notes, transcripts, images (multimodal), and video links |
-| Organization | Click / Ctrl+click / box-select / Ctrl+A, move groups together, tile z-ordering, curved connection arrows |
+| Organization | Click / Ctrl+click / box-select / Ctrl+A (links included), move groups together, tile z-ordering, curved connection arrows |
+| Share links | Chain-icon button copies a `atless.tech/#/s/<id>` link; anyone opening it loads your exact canvas as an editable copy (Worker + Tiger Data, see below) |
 | Search | `Ctrl+F` finds titles and note text, then flies the camera to the match |
 | Persistence | Tiles auto-save to localStorage (with quota-safe degradation) |
 | Theming | Light + dark mode with persisted preference |
@@ -30,14 +29,16 @@ on a pannable, zoomable board that persists across visits.
 | Scroll wheel | Zoom in / out |
 | Double-click (background) | New text note |
 | Double-click (tile title) | Rename tile |
-| Drag background | Box select |
-| Ctrl + click | Toggle tile in selection |
+| Drag background | Box select tiles + the links between them (`Ctrl` adds to selection) |
+| Ctrl + click | Toggle tile / connection in selection |
 | Ctrl + A | Select all tiles |
-| Delete / Backspace | Delete selected tiles |
+| Delete | Delete selected tiles / connections |
 | Hold Space, or press R | Record / stop voice note |
 | Right-click tile | Context menu (read aloud, transcribe, download, explain) |
 | Ctrl + F | Search tiles |
-| Right-click → Make connection | Link two tiles with a curved arrow (Esc cancels) |
+| Right-click → Make connection | Link two tiles with a curved arrow |
+| Esc | Cancel connection / close menus |
+| Chain-icon button | Copy a shareable link to this canvas |
 | `?` | Shortcut guide |
 
 ## Getting started
@@ -59,7 +60,20 @@ AI features need keys. Copy these into a `.env` file in the project root
 ```bash
 VITE_ELEVENLABS_API_KEY=your-elevenlabs-key
 VITE_GEMINI_API_KEY=your-gemini-api-studio-key
+VITE_SHARE_API_URL=http://localhost:8787
 ```
+
+> Restart `npm run dev` after creating or changing `.env` — Vite only
+> reads it at startup. **Production** (`atless.tech`) bakes these in at
+> build time, so set the same names as repo
+> **Settings → Secrets and variables → Actions** secrets — see
+> `server/README.md` for the share API.
+
+| Key | Used for | Notes |
+| --- | --- | --- |
+| `VITE_ELEVENLABS_API_KEY` | Text-to-speech previews, voice-note transcription | Needs available character credits |
+| `VITE_GEMINI_API_KEY` | Canvas summaries, image explanations | Must be a Google AI Studio key (`AIza…`) |
+| `VITE_SHARE_API_URL` | Generate-link button, opening shared links | Cloudflare Worker URL; graceful "not configured" toast when unset |
 
 > Restart `npm run dev` after creating or changing `.env` — Vite only
 > reads it at startup.
@@ -89,16 +103,22 @@ constant above — the app surfaces API error details in toasts and tooltips.
 │   ├── main.jsx                # React entry
 │   ├── index.css               # Tailwind, fonts, wave layer, animation + scrollbar helpers
 │   ├── App.jsx                 # canvas, tiles state, recording, search,
-│   │                           #   selection, AI calls, persistence
+│   │                           #   selection, connections, AI calls, share links, persistence
 │   └── components/
-│       ├── TopPillHeader.jsx   # floating pill: logo, theme, help, summarize
+│       ├── TopPillHeader.jsx   # floating pill (logo, help, links, summarize, share, theme)
 │       ├── TextNote.jsx        # editable text tile + TTS preview
 │       ├── MediaTile.jsx       # image / video / YouTube tile
 │       ├── AudioTile.jsx       # voice player + transcript
 │       ├── SummaryTile.jsx     # Gemini synthesis tile
 │       ├── TileMenu.jsx        # right-click tile context menu
-│       └── TileName.jsx        # inline tile rename field
-└── .github/workflows/deploy.yml  # CI: build on Node 20/22, deploy to Pages
+│       ├── TileName.jsx        # inline tile rename field
+├── src/lib/
+│   └── tileName.js             # display-name fallback (custom name, first word, type)
+├── server/                     # share-link backend (see server/README.md)
+│   ├── src/index.js            # Cloudflare Worker: POST/GET /api/shares to Tiger Data
+│   ├── schema.sql              # shares table migration (run once via psql)
+│   └── wrangler.toml           # worker + Hyperdrive binding config
+└── .github/workflows/deploy.yml  # CI: build, deploy to Pages
 ```
 
 ## How it works (internals worth knowing)
@@ -109,6 +129,15 @@ constant above — the app surfaces API error details in toasts and tooltips.
 - **Tiles** — `react-rnd` with a dedicated `tile-drag-handle`,
   `cancel=".no-drag"` for inner controls, zoom-aware `scale`, and a fixed
   stacking order: text (40) > audio (30) > video (20) > photo (10).
+  Connection arrows sit at z-25: above photos and videos so links stay
+  visible, below audio and text so they never cross readable content.
+- **Names** — every tile shows its custom name, else a text note's first
+  word, else a per-type fallback (`src/lib/tileName.js` — shared by tile
+  headers, search-adjacent lists, and the connections panel).
+- **Share links** — the chain button `POST`s `{ tiles, connections }` to
+  the Worker (`VITE_SHARE_API_URL`), which stores one `shares` row and
+  returns an id. The copied `/#/s/<id>` link loads that exact canvas as an
+  editable local copy (hash is dropped after load so refresh uses autosave).
 - **Coordinates** — screen ↔ content mapping assumes the library's
   `transform-origin: 0 0`: `content = (client − wrapperOrigin − pan) / scale`.
 - **Persistence** — debounced `localStorage` snapshots. Images are
@@ -119,7 +148,9 @@ constant above — the app surfaces API error details in toasts and tooltips.
 
 Pushes to `main` build and deploy `./dist` to GitHub Pages via
 `.github/workflows/deploy.yml`. In repo **Settings → Pages**, set the source
-to **GitHub Actions**. Serves from a subpath (e.g. `*.github.io/atless/`)?
+to **GitHub Actions**. `VITE_*` keys bake in at build time, so production
+needs the same names as **Actions secrets** (not just local `.env`).
+Serves from a subpath (e.g. `*.github.io/atless/`)?
 Use relative asset paths or set Vite's `base` accordingly.
 
 ## Troubleshooting
@@ -132,3 +163,7 @@ Use relative asset paths or set Vite's `base` accordingly.
 | `QuotaExceededError` in console | Huge canvas — autosave sheds media, notes are safe |
 | Microphone won't start | Browser blocked the permission — allow it and retry |
 | Favicon stale after redeploy | Browsers cache icons hard — the `?v=` query on the link tag busts it |
+| Share button: "API not configured" | `VITE_SHARE_API_URL` missing — add it to `.env` (restart dev) or Actions secrets (push to rebuild) |
+| Share failed (HTTP 405) | The secret holds a markdown link (`[url](url)`) instead of the bare Worker URL — fix the secret, push to rebuild |
+| Shared link won't load | Stale Worker — redeploy with `npx wrangler deploy` from `server/` |
+| Share too large | Canvas exceeds ~15MB inline — drop some media until object-storage uploads land |
