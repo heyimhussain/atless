@@ -8,7 +8,7 @@ import TileName, { NameHint } from "./TileName.jsx";
 // (see lockAspectRatioExtraHeight below) and adding it to probed tile sizes.
 export const MEDIA_HEADER_H = 28;
 
-export default function MediaTile({ tile, scale, selected, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop }) {
+export default function MediaTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
   const isVideo = tile.type === "video";
   const isYouTube = tile.type === "youtube";
   const [renaming, setRenaming] = useState(false);
@@ -51,8 +51,13 @@ export default function MediaTile({ tile, scale, selected, onChange, onDelete, o
       style={{ zIndex: tile.type === "image" ? 10 : 20 }}
     >
       <div
-        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white transition-shadow duration-150 dark:bg-stone-900 ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
+        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white transition-all duration-150 active:scale-[0.985] dark:bg-stone-900 ${leaving ? "animate-tile-out" : "animate-tile-in"} ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
         onMouseDown={(e) => onTileMouseDown(tile.id, e)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onTileContextMenu(tile.id, e.clientX, e.clientY);
+        }}
         onDoubleClick={(e) => e.stopPropagation()}
         onWheel={(e) => e.stopPropagation()}
       >
@@ -69,7 +74,7 @@ export default function MediaTile({ tile, scale, selected, onChange, onDelete, o
             {renaming ? (
               <TileName name={tile.name} placeholder={tile.type} onCommit={commitName} />
             ) : tile.name ? (
-              <span className="min-w-0 truncate">{tile.name}</span>
+              <span className="min-w-0 truncate font-display font-medium">{tile.name}</span>
             ) : (
               <NameHint />
             )}

@@ -3,6 +3,12 @@
 /* Class-based dark mode (toggled via .dark on <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
 :root {
   color-scheme: light;
 }
@@ -19,8 +25,8 @@ body,
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    sans-serif;
+  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   background: #fafaf7;
   color: #1c1917;
@@ -30,7 +36,7 @@ body {
   color: #e7e5e4;
 }
 
-/* Subtle SVG dot-grid pattern */
+/* Subtle SVG dot-grid pattern (legacy, kept for reference) */
 .dot-grid {
   background-color: #fafaf7;
   background-image: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1.5' cy='1.5' r='1.5' fill='%23d6d3d1' fill-opacity='0.9'/%3E%3C/svg%3E");
@@ -46,21 +52,99 @@ body {
   display: none;
 }
 
-/* Infinite canvas dot layer — fixed-size dots; background-position is
-   driven in lockstep with pan via a transform subscription (see App.jsx). */
-.dot-grid-layer {
-  background-color: #fafaf7;
-  background-image: radial-gradient(circle, #d6d3d1 1.5px, transparent 1.5px);
-  background-size: 24px 24px;
-  background-position: 0 0;
-  background-repeat: repeat;
+/* Fresh, alive micro-animations */
+@keyframes tile-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
-.dark .dot-grid-layer {
-  background-color: #0c0a09;
-  background-image: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.13) 1.5px,
-    transparent 1.5px
+@keyframes fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-tile-in {
+  animation: tile-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.animate-tile-out {
+  animation: tile-out 0.18s ease-in forwards;
+  pointer-events: none;
+}
+@keyframes tile-out {
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+.animate-fade-slide-in {
+  animation: fade-slide-in 0.18s ease-out;
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+
+/* Revolving + pulsing aura behind the welcome card */
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes glow-spin {
+  to {
+    --glow-angle: 360deg;
+  }
+}
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.welcome-glow {
+  background: conic-gradient(
+    from var(--glow-angle),
+    transparent 0deg,
+    rgba(59, 130, 246, 0.55) 60deg,
+    transparent 120deg,
+    transparent 200deg,
+    rgba(59, 130, 246, 0.35) 260deg,
+    transparent 320deg
+  );
+  filter: blur(10px);
+  animation:
+    glow-spin 5s linear infinite,
+    glow-pulse 2.8s ease-in-out infinite;
+}
+.dark .welcome-glow {
+  background: conic-gradient(
+    from var(--glow-angle),
+    transparent 0deg,
+    rgba(250, 160, 22, 0.5) 60deg,
+    transparent 120deg,
+    transparent 200deg,
+    rgba(250, 160, 22, 0.32) 260deg,
+    transparent 320deg
   );
 }
 

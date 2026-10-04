@@ -3,15 +3,15 @@ import {
   TransformWrapper,
   TransformComponent,
   useTransformContext,
-  useTransformEffect,
   useControls,
 } from "react-zoom-pan-pinch";
-import { Search, X } from "lucide-react";
+import { Search, Type, X } from "lucide-react";
 import TopPillHeader from "./components/TopPillHeader.jsx";
 import TextNote from "./components/TextNote.jsx";
 import MediaTile, { MEDIA_HEADER_H } from "./components/MediaTile.jsx";
 import AudioTile from "./components/AudioTile.jsx";
 import SummaryTile from "./components/SummaryTile.jsx";
+import TileMenu from "./components/TileMenu.jsx";
 
 const NOTE_W = 230;
 const NOTE_H = 170;
@@ -23,6 +23,10 @@ const SUM_H = 220;
 // Current model per Google (gemini-2.0-flash was retired); change here
 // if the lineup moves again.
 const GEMINI_MODEL = "gemini-3.8-flash";
+// ElevenLabs read-aloud voice + current TTS model (legacy monolingual models
+// may 422 — flip TTS_MODEL_ID back if needed).
+const TTS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+const TTS_MODEL_ID = "eleven_multilingual_v2";
 
 function fitBox(nw, nh, max = MEDIA_MAX) {
   if (!nw || !nh) return { w: 320, h: 240 };
@@ -136,6 +140,17 @@ function parseYouTubeUrl(text) {
   return m ? m[1] : null;
 }
 
+// Extract a Gemini inline_data image part from an image tile, or null when
+// the payload is missing, unsupported (GIF/SVG), or too large.
+function tileImagePart(tile) {
+  if (tile?.type !== "image" || typeof tile.src !== "string") return null;
+  const m = tile.src.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/s);
+  if (!m || m[3].length > 14000000) return null;
+  let mime = m[1].toLowerCase();
+  if (mime === "image/jpg") mime = "image/jpeg";
+  return { inline_data: { mime_type: mime, data: m[3] } };
+}
+
 function kindOf(file) {
   const t = (file.type || "").toLowerCase();
   const n = (file.name || "").toLowerCase();
@@ -222,7 +237,6 @@ function CanvasSurface({
   selectedIds,
   viewRef,
   instanceRef,
-  gridRef,
   controlsRef,
   onChange,
   onDelete,
@@ -231,7 +245,9 @@ function CanvasSurface({
   onTileDragStart,
   onTileDrag,
   onTileDragStop,
-  notify,
+  busyIds,
+  onTileContextMenu,
+  leavingIds,
 }) {
   const ctx = useTransformContext();
   const controls = useControls();
@@ -241,21 +257,6 @@ function CanvasSurface({
     instanceRef.current = ctx;
     controlsRef.current = controls;
   }, [ctx, controls, viewRef, instanceRef, controlsRef]);
-
-  // Keep the infinite dot grid glued to the canvas: fixed-size dots that
-  // slide 1:1 with pan, written straight to the DOM on every transform
-  // (no React-state lag during smooth zoom/pan animations).
-  const syncGrid = useCallback(
-    (s) => {
-      const el = gridRef.current;
-      if (!el || !s) return;
-      const x = s.positionX ?? 0;
-      const y = s.positionY ?? 0;
-      el.style.backgroundPosition = `${x}px ${y}px`;
-    },
-    [gridRef],
-  );
-  useTransformEffect(syncGrid);
 
   return (
     // Zero-size anchor: tiles are absolutely positioned, so the transform
@@ -274,7 +275,9 @@ function CanvasSurface({
           onTileDragStart,
           onTileDrag,
           onTileDragStop,
-          notify,
+          busy: busyIds.includes(tile.id),
+          leaving: leavingIds.includes(tile.id),
+          onTileContextMenu,
         };
         if (tile.type === "text") {
           return <TextNote key={tile.id} {...common} />;
@@ -301,7 +304,6 @@ export default function App() {
   const viewRef = useRef({ positionX: 0, positionY: 0, scale: 1, wrapper: null });
   // Live library instance — always current, never a stale mirror.
   const instanceRef = useRef(null);
-  const gridRef = useRef(null);
   // Bound transform controls (setTransform, …) captured inside the canvas.
   const controlsRef = useRef(null);
   const recorderRef = useRef(null);
@@ -460,18 +462,8 @@ export default function App() {
         else lines.push(`- Audio clip titled "${label}" (not transcribed)`);
       } else if (t.type === "image") {
         const label = (t.name || "").trim();
-        // Attach supported stills directly (PNG/JPEG/WEBP, capped); GIF/SVG
-        // and oversized payloads fall back to text context only.
-        if (typeof t.src === "string") {
-          const m = t.src.match(/^data:(image\/(png|jpeg|jpg|webp));base64,(.+)$/s);
-          if (m && imageParts.length < 12) {
-            let mime = m[1].toLowerCase();
-            if (mime === "image/jpg") mime = "image/jpeg";
-            if (m[3].length <= 14000000) {
-              imageParts.push({ inline_data: { mime_type: mime, data: m[3] } });
-            }
-          }
-        }
+        const part = tileImagePart(t);
+        if (part && imageParts.length < 12) imageParts.push(part);
         if (label) lines.push(`- Image "${label}"`);
         else lines.push(`- An attached image (see image parts for visual content)`);
       } else if (t.type === "video") {
@@ -774,6 +766,22 @@ export default function App() {
     [updateTile],
   );
 
+  // Clicking empty canvas or another tile ends text editing — but never
+  // steals the caret when clicking inside the field being edited. Wired as
+  // a capture handler so inner stopPropagation calls can't block it.
+  const blurActiveText = useCallback((e) => {
+    const a = document.activeElement;
+    if (
+      a instanceof HTMLElement &&
+      (a.tagName === "TEXTAREA" ||
+        (a.tagName === "INPUT" && a.type === "text"))
+    ) {
+      if (e.target instanceof Node && (a === e.target || a.contains(e.target)))
+        return;
+      a.blur();
+    }
+  }, []);
+
   // Marquee: plain background press-and-drag (Shift is reserved for panning).
   const handleWrapperMouseDown = useCallback((e) => {
     if (e.button !== 0 || e.shiftKey) return;
@@ -882,44 +890,56 @@ export default function App() {
     };
   }, [addMediaTiles, addYouTubeTile, clientToContent, showToast]);
 
-  const deleteTile = useCallback((id) => {
-    if (selectedRef.current.includes(id)) {
-      const next = selectedRef.current.filter((x) => x !== id);
-      selectedRef.current = next;
-      setSelectedIds(next);
-    }
-    setTiles((prev) => {
-      const target = prev.find((t) => t.id === id);
-      if (target?.src?.startsWith("blob:")) {
-        try {
-          URL.revokeObjectURL(target.src);
-        } catch {
-          /* noop */
-        }
-      }
-      return prev.filter((t) => t.id !== id);
-    });
-  }, []);
+  // Tiles fade/shrink out instead of vanishing: mark them leaving, then
+  // remove after the exit animation. Pending removals accumulate in a ref
+  // so rapid successive deletes never strand a tile.
+  const [leavingIds, setLeavingIds] = useState([]);
+  const leaveTimer = useRef(null);
+  const pendingRemoveRef = useRef(new Set());
 
-  const deleteSelected = useCallback(() => {
-    const ids = selectedRef.current;
-    if (ids.length === 0) return;
-    const doomed = new Set(ids);
-    selectedRef.current = [];
-    setSelectedIds([]);
-    setTiles((prev) => {
-      for (const t of prev) {
-        if (doomed.has(t.id) && t.src?.startsWith("blob:")) {
-          try {
-            URL.revokeObjectURL(t.src);
-          } catch {
-            /* noop */
+  const removeTiles = useCallback((ids) => {
+    const list = [...new Set(ids)];
+    if (list.length === 0) return;
+    for (const id of list) pendingRemoveRef.current.add(id);
+    const kept = selectedRef.current.filter(
+      (x) => !pendingRemoveRef.current.has(x),
+    );
+    selectedRef.current = kept;
+    setSelectedIds(kept);
+    setLeavingIds((prev) => [
+      ...prev,
+      ...list.filter((id) => !prev.includes(id)),
+    ]);
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    leaveTimer.current = setTimeout(() => {
+      const doomed = new Set(pendingRemoveRef.current);
+      pendingRemoveRef.current.clear();
+      setTiles((prev) => {
+        for (const t of prev) {
+          if (doomed.has(t.id) && t.src?.startsWith("blob:")) {
+            try {
+              URL.revokeObjectURL(t.src);
+            } catch {
+              /* noop */
+            }
           }
         }
-      }
-      return prev.filter((t) => !doomed.has(t.id));
-    });
+        return prev.filter((t) => !doomed.has(t.id));
+      });
+      setLeavingIds((prev) => prev.filter((x) => !doomed.has(x)));
+    }, 190);
   }, []);
+
+  const deleteTile = useCallback(
+    (id) => {
+      removeTiles([id]);
+    },
+    [removeTiles],
+  );
+
+  const deleteSelected = useCallback(() => {
+    removeTiles(selectedRef.current);
+  }, [removeTiles]);
 
   // Track Shift so the grab cursor only shows in pan mode.
   useEffect(() => {
@@ -960,7 +980,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [searchOpen]);
 
-  // Delete / Backspace removes all selected tiles (never while typing).
+  // Delete key removes all selected tiles (never while typing).
   // Ctrl/Cmd + A selects every tile on the canvas.
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -972,7 +992,7 @@ export default function App() {
         setSelectedIds(all);
         return;
       }
-      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (e.key !== "Delete") return;
       if (isEditableTarget(e)) return;
       if (selectedRef.current.length === 0) return;
       e.preventDefault();
@@ -981,6 +1001,347 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [deleteSelected]);
+
+  // ---- single read-aloud preview (one at a time, driven from tile menus) ----
+  const [previewingId, setPreviewingId] = useState(null);
+  const previewIdRef = useRef(null);
+  const previewAudioRef = useRef(null);
+  const previewUrlRef = useRef(null);
+
+  const stopPreview = useCallback(() => {
+    try {
+      previewAudioRef.current?.pause();
+    } catch {
+      /* noop */
+    }
+    previewAudioRef.current = null;
+    if (previewUrlRef.current) {
+      try {
+        URL.revokeObjectURL(previewUrlRef.current);
+      } catch {
+        /* noop */
+      }
+      previewUrlRef.current = null;
+    }
+    previewIdRef.current = null;
+    setPreviewingId(null);
+  }, []);
+
+  const speakTile = useCallback(
+    async (tile) => {
+      if (previewIdRef.current === tile.id) {
+        stopPreview();
+        return;
+      }
+      const text = (tile.text || "").trim();
+      if (!text) return;
+      const key = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      if (!key) {
+        showToast(
+          "Missing VITE_ELEVENLABS_API_KEY — restart dev server after adding .env",
+          4000,
+        );
+        return;
+      }
+      stopPreview();
+      previewIdRef.current = tile.id;
+      setPreviewingId(tile.id);
+      try {
+        const res = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${TTS_VOICE_ID}`,
+          {
+            method: "POST",
+            headers: {
+              "xi-api-key": key,
+              "Content-Type": "application/json",
+              Accept: "audio/mpeg",
+            },
+            body: JSON.stringify({ text, model_id: TTS_MODEL_ID }),
+          },
+        );
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            const msg =
+              errJson?.detail?.message || errJson?.detail || errJson?.message;
+            if (msg && typeof msg === "string") detail += ` — ${msg}`;
+            console.error("ElevenLabs TTS error:", res.status, errJson);
+          } catch {
+            console.error("ElevenLabs TTS error:", res.status);
+          }
+          throw new Error(detail);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        previewUrlRef.current = url;
+        const audio = new Audio(url);
+        previewAudioRef.current = audio;
+        audio.onended = () => stopPreview();
+        audio.onerror = () => {
+          showToast("Read aloud failed (playback error)", 4000);
+          stopPreview();
+        };
+        await audio.play();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast(`Read aloud failed (${msg || "network error"})`, 4000);
+        stopPreview();
+      }
+    },
+    [stopPreview, showToast],
+  );
+
+  // ---- per-tile busy set (transcriptions in flight) ----
+  const [busyIds, setBusyIds] = useState([]);
+
+  // Stop voice previews for tiles that no longer exist.
+  useEffect(() => {
+    if (
+      previewIdRef.current &&
+      !tiles.some((t) => t.id === previewIdRef.current)
+    ) {
+      stopPreview();
+    }
+  }, [tiles, stopPreview]);
+
+  const transcribeTile = useCallback(
+    async (tile) => {
+      if (!tile?.src || busyIds.includes(tile.id)) return;
+      const key = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      if (!key) {
+        showToast(
+          "Missing VITE_ELEVENLABS_API_KEY — restart dev server after adding .env",
+          4000,
+        );
+        return;
+      }
+      setBusyIds((prev) => [...prev, tile.id]);
+      showToast("Transcribing audio…", 20000);
+      try {
+        const blob = await (await fetch(tile.src)).blob();
+        const ext = blob.type.includes("mp4")
+          ? "m4a"
+          : blob.type.includes("mpeg") || blob.type.includes("mp3")
+            ? "mp3"
+            : blob.type.includes("wav")
+              ? "wav"
+              : blob.type.includes("ogg") || blob.type.includes("opus")
+                ? "ogg"
+                : "webm";
+        const form = new FormData();
+        form.append("file", blob, `${tile.name || "recording"}.${ext}`);
+        form.append("model_id", "scribe_v2");
+        const res = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+          method: "POST",
+          headers: { "xi-api-key": key },
+          body: form,
+        });
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            const msg =
+              errJson?.detail?.message || errJson?.detail || errJson?.message;
+            if (msg && typeof msg === "string") detail += ` — ${msg}`;
+            console.error("ElevenLabs STT error:", res.status, errJson);
+          } catch {
+            console.error("ElevenLabs STT error:", res.status);
+          }
+          throw new Error(detail);
+        }
+        const json = await res.json();
+        const text = (json?.text || "").trim();
+        updateTile(tile.id, {
+          transcript: text,
+          h: Math.max(tile.h || 0, 200),
+        });
+        showToast("Transcript ready");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast(`Transcription failed (${msg || "network error"})`, 5000);
+      } finally {
+        setBusyIds((prev) => prev.filter((x) => x !== tile.id));
+      }
+    },
+    [busyIds, showToast, updateTile],
+  );
+
+  const downloadTile = useCallback(
+    (tile) => {
+      if (!tile?.src) {
+        showToast("Nothing to download — file not saved on this device");
+        return;
+      }
+      let ext = "bin";
+      const mm = tile.src.match(/^data:(\w+)\/([\w.+-]+);/);
+      if (mm) {
+        const sub = mm[2].toLowerCase();
+        ext =
+          sub === "mpeg"
+            ? "mp3"
+            : sub === "mp4" && tile.type === "audio"
+              ? "m4a"
+              : sub;
+      } else if (tile.name && /\.\w{2,4}$/.test(tile.name)) {
+        ext = tile.name.split(".").pop().toLowerCase();
+      }
+      const base =
+        (tile.name || "recording").replace(/\.\w{2,4}$/, "") || "recording";
+      const a = document.createElement("a");
+      a.href = tile.src;
+      a.download = `${base}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
+    [showToast],
+  );
+
+  const explainImage = useCallback(
+    async (tile) => {
+      if (tile?.type !== "image" || busyIds.includes(tile.id)) return;
+      const key = import.meta.env.VITE_GEMINI_API_KEY;
+      if (!key) {
+        showToast(
+          "Missing VITE_GEMINI_API_KEY — restart dev server after adding .env",
+          4000,
+        );
+        return;
+      }
+      const part = tileImagePart(tile);
+      if (!part) {
+        showToast("Couldn't read this image for analysis");
+        return;
+      }
+      setBusyIds((prev) => [...prev, tile.id]);
+      showToast("Analyzing image…", 30000);
+      try {
+        const label = (tile.name || "").trim();
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [
+                  {
+                    text: "You are a helpful visual assistant. Explain what is shown in the provided image in one plain-text paragraph. If it contains a math problem, homework question, or puzzle, solve it step by step in plain sentences and end with the final answer. No markdown, headings, lists, or symbols.",
+                  },
+                ],
+              },
+              contents: [
+                {
+                  parts: [
+                    part,
+                    {
+                      text: `Tile titled "${label || "untitled image"}". Explain it${label ? "" : " in detail"}.`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+            }),
+          },
+        );
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try {
+            const errJson = await res.json();
+            const msg = errJson?.error?.message;
+            if (msg && typeof msg === "string") detail += ` — ${msg}`;
+            console.error("Gemini explain error:", res.status, errJson);
+          } catch {
+            console.error("Gemini explain error:", res.status);
+          }
+          throw new Error(detail);
+        }
+        const json = await res.json();
+        const solution = cleanSummaryText(
+          ((json?.candidates?.[0]?.content?.parts || []))
+            .map((p) => p?.text || "")
+            .join(""),
+        );
+        if (!solution) {
+          showToast("Gemini returned an empty explanation");
+          return;
+        }
+        setTiles((prev) => [
+          ...prev,
+          {
+            id: nextId("summary"),
+            type: "summary",
+            x: tile.x + tile.w + 24,
+            y: tile.y,
+            w: SUM_W,
+            h: SUM_H,
+            text: solution,
+            name: "Explanation",
+          },
+        ]);
+        showToast("Explanation ready");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast(`Explanation failed (${msg || "network error"})`, 4000);
+      } finally {
+        setBusyIds((prev) => prev.filter((x) => x !== tile.id));
+      }
+    },
+    [busyIds, showToast, nextId],
+  );
+
+  // ---- right-click tile menu (text/audio/image only) ----
+  const [menu, setMenu] = useState(null); // { x, y, id } in client coords; id null = background
+  const [menuShown, setMenuShown] = useState(false);
+  const menuTimer = useRef(null);
+
+  const openMenu = useCallback((m) => {
+    if (menuTimer.current) {
+      clearTimeout(menuTimer.current);
+      menuTimer.current = null;
+    }
+    setMenu(m);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setMenuShown(true));
+    });
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setMenuShown(false);
+    if (menuTimer.current) clearTimeout(menuTimer.current);
+    menuTimer.current = setTimeout(() => setMenu(null), 150);
+  }, []);
+
+  const handleTileContextMenu = useCallback((id, x, y) => {
+    const t = tilesRef.current.find((t) => t.id === id);
+    if (!t || (t.type !== "text" && t.type !== "audio" && t.type !== "image"))
+      return;
+    openMenu({ x, y, id });
+  }, [openMenu]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e) => {
+      if (!e.target.closest?.(".tile-menu")) closeMenu();
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") closeMenu();
+    };
+    window.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu, closeMenu]);
+
+  useEffect(
+    () => () => {
+      if (menuTimer.current) clearTimeout(menuTimer.current);
+    },
+    [],
+  );
 
   // Persist every tiles update (debounced) so notes survive refreshes.
   // Media embeds can exceed the ~5MB localStorage quota — in that case drop
@@ -1143,6 +1504,85 @@ export default function App() {
     return () => window.removeEventListener("mousemove", onMove);
   }, []);
 
+  // Living ASCII wave background: a fixed full-viewport canvas of wave glyphs
+  // that slides with pan and morphs/brightens around the cursor.
+  const waveRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = waveRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let raf = 0;
+    let last = 0;
+    const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
+    const resize = () => {
+      const d = dpr();
+      canvas.width = Math.max(1, Math.floor(window.innerWidth * d));
+      canvas.height = Math.max(1, Math.floor(window.innerHeight * d));
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    const CHARS = ["·", "~", "≈", "∿", "≋"];
+    const draw = (now) => {
+      raf = requestAnimationFrame(draw);
+      if (now - last < 66) return; // ~15fps stepped ascii motion
+      last = now;
+      const d = dpr();
+      const w = canvas.width;
+      const h = canvas.height;
+      if (!w || !h) return;
+      ctx.clearRect(0, 0, w, h);
+      const dark = document.documentElement.classList.contains("dark");
+      // Screen-fixed checkered grid: it never translates with pan or zoom,
+      // so canvas motion can't feel dizzying. Only the wave phase and the
+      // cursor aura move.
+      const gap = 24 * d;
+      ctx.font = `${12 * d}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const t = now / 1400;
+      const cur = cursorRef.current;
+      const cols = Math.ceil(w / gap);
+      const rows = Math.ceil(h / gap);
+      for (let i = 0; i <= cols; i++) {
+        for (let j = 0; j <= rows; j++) {
+          const sx = i * gap;
+          const sy = j * gap;
+          const cxx = sx / d;
+          const cyy = sy / d;
+          let v = Math.sin(cxx * 0.05 + t) + Math.cos(cyy * 0.05 - t * 0.8);
+          let glow = 0;
+          if (cur) {
+            const dx = sx / d - cur.x;
+            const dy = sy / d - cur.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 240) {
+              const b = 1 - dist / 240;
+              v += b * 3;
+              glow = b * b;
+            }
+          }
+          let idx = Math.floor(((v + 2) / 5.5) * CHARS.length);
+          if (idx < 0) idx = 0;
+          else if (idx > CHARS.length - 1) idx = CHARS.length - 1;
+          const a = dark
+            ? 0.12 + idx * 0.03 + glow * 0.4
+            : 0.4 + idx * 0.05 + glow * 0.45;
+          ctx.globalAlpha = a > 1 ? 1 : a;
+          ctx.fillStyle = dark ? "#ffffff" : "#a8a29e";
+          ctx.fillText(CHARS[idx], sx, sy);
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+    raf = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
   // Global Space (hold) / R (toggle) shortcuts
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -1170,10 +1610,11 @@ export default function App() {
     };
   }, [startRecording, stopRecording]);
 
-  // Cleanup recorder on unmount
+  // Cleanup recorder + voice preview on unmount
   useEffect(() => {
     return () => {
       stopTimer();
+      stopPreview();
       try {
         recorderRef.current?.state !== "inactive" &&
           recorderRef.current?.stop?.();
@@ -1188,7 +1629,7 @@ export default function App() {
         }
       });
     };
-  }, [stopTimer]);
+  }, [stopTimer, stopPreview]);
 
   // Auto-clear recording errors
   useEffect(() => {
@@ -1201,15 +1642,15 @@ export default function App() {
     <div className="relative h-screen w-screen overflow-hidden bg-[#fafaf7] dark:bg-[#0c0a09]">
       {/* Infinite dot grid — fixed-size dots that slide 1:1 with pan,
           repainted in lockstep via a transform subscription (no lag). */}
-      <div
-        ref={gridRef}
+      <canvas
+        ref={waveRef}
         aria-hidden="true"
-        className="dot-grid-layer pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 h-full w-full"
       />
       <TopPillHeader onSummarize={summarizeCanvas} summarizing={summarizing} />
 
       {searchOpen && (
-        <div className="absolute top-20 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/60 bg-white/80 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85 dark:ring-white/10">
+        <div className="absolute top-20 left-1/2 z-50 flex -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 bg-white/80 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85 dark:ring-white/10">
           <Search size={14} className="shrink-0 text-neutral-400 dark:text-stone-500" />
           <input
             ref={searchInputRef}
@@ -1258,6 +1699,12 @@ export default function App() {
         className="transform-wrapper-fill absolute inset-0"
         onDoubleClick={handleEmptyDoubleClick}
         onMouseDown={handleWrapperMouseDown}
+        onMouseDownCapture={blurActiveText}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (e.target.closest?.(".tile-rnd")) return;
+          openMenu({ x: e.clientX, y: e.clientY, id: null });
+        }}
       >
         <TransformWrapper
           initialScale={1}
@@ -1287,7 +1734,6 @@ export default function App() {
               selectedIds={selectedIds}
               viewRef={viewRef}
               instanceRef={instanceRef}
-              gridRef={gridRef}
               controlsRef={controlsRef}
               onChange={updateTile}
               onDelete={deleteTile}
@@ -1296,34 +1742,119 @@ export default function App() {
               onTileDragStart={handleTileDragStart}
               onTileDrag={handleTileDrag}
               onTileDragStop={handleTileDragStop}
-              notify={showToast}
+              busyIds={busyIds}
+              leavingIds={leavingIds}
+              onTileContextMenu={handleTileContextMenu}
             />
           </TransformComponent>
         </TransformWrapper>
       </div>
 
       {tiles.length === 0 && (
-        <div className="pointer-events-none absolute top-1/2 left-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 rounded-2xl border border-neutral-200/70 bg-white/60 px-6 py-4.5 text-center shadow-sm backdrop-blur-sm select-none dark:border-white/10 dark:bg-stone-900/60">
-          <p className="text-base font-medium text-neutral-600 dark:text-stone-200">Welcome to <span className="font-bold">Atless</span>.</p>
+        <div className="pointer-events-none absolute top-1/2 left-1/2 z-40 -translate-x-1/2 -translate-y-1/2 animate-fade-in">
+          <div
+            aria-hidden="true"
+            className="welcome-glow absolute -inset-3 rounded-[28px]"
+          />
+          <div className="relative flex flex-col items-center gap-2 rounded-2xl border border-neutral-200/70 bg-white/60 px-6 py-4.5 text-center shadow-sm backdrop-blur-sm select-none dark:border-white/10 dark:bg-stone-900/60">
+          <p className="font-display text-base font-medium text-neutral-600 dark:text-stone-200">Welcome to <span className="font-bold">Atless</span>.</p>
           <p className="max-w-[240px] text-sm leading-relaxed text-balance text-neutral-400 dark:text-stone-500">
             more productivity, <span className="font-bold">less clutter</span>.
           </p>
           <p className="text-sm text-neutral-400 dark:text-stone-500">
             double-click anywhere to begin.
           </p>
+          </div>
         </div>
       )}
 
       {toast && (
-        <div className="absolute bottom-20 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 rounded-full border border-neutral-200 bg-white/90 px-4 py-2 text-xs whitespace-nowrap text-stone-700 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/90 dark:text-stone-200">
+        <div className="absolute bottom-20 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 animate-fade-in rounded-full border border-neutral-200 bg-white/90 px-4 py-2 text-xs whitespace-nowrap text-stone-700 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/90 dark:text-stone-200">
           {toast}
+        </div>
+      )}
+
+      {menu &&
+        (() => {
+          const t = tiles.find((x) => x.id === menu.id);
+          if (!t) return null;
+          return (
+            <TileMenu
+              x={menu.x}
+              y={menu.y}
+              tile={t}
+              playing={previewingId === t.id}
+              busy={busyIds.includes(t.id)}
+              onSpeak={() => {
+                closeMenu();
+                speakTile(t);
+              }}
+              onTranscribe={() => {
+                closeMenu();
+                transcribeTile(t);
+              }}
+              onDownload={() => {
+                closeMenu();
+                downloadTile(t);
+              }}
+              onExplain={() => {
+                closeMenu();
+                explainImage(t);
+              }}
+              onDelete={() => {
+                const id = t.id;
+                closeMenu();
+                // Deleting from a multi-selection removes the whole group.
+                if (
+                  selectedRef.current.includes(id) &&
+                  selectedRef.current.length > 1
+                ) {
+                  deleteSelected();
+                } else {
+                  deleteTile(id);
+                }
+              }}
+              shown={menuShown}
+            />
+          );
+        })()}
+
+      {menu && !menu.id && (
+        <div
+          role="menu"
+          aria-label="Canvas actions"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className={`tile-menu fixed z-[60] w-52 rounded-2xl border border-white/60 bg-white/85 p-1.5 shadow-xl ring-1 ring-black/5 backdrop-blur-xl transition-all duration-150 origin-top-left dark:border-white/10 dark:bg-stone-900/90 dark:ring-white/10 ${
+            menuShown ? "scale-100 opacity-100" : "pointer-events-none scale-[0.97] opacity-0"
+          }`}
+          style={{
+            left: Math.max(8, Math.min(menu.x, window.innerWidth - 216)),
+            top: Math.max(8, Math.min(menu.y, window.innerHeight - 80)),
+          }}
+        >
+          <button
+            onClick={() => {
+              const p = clientToContent(menu.x, menu.y);
+              closeMenu();
+              addTile(p.x, p.y);
+            }}
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-stone-700 transition outline-none hover:bg-neutral-100 dark:text-stone-200 dark:hover:bg-white/10"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 dark:bg-white/10 dark:text-stone-400">
+              <Type size={13} />
+            </span>
+            Create text tile
+          </button>
         </div>
       )}
 
       {marqueeBox && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-40 border border-stone-400/70 bg-stone-500/10 dark:border-sky-300/40 dark:bg-sky-300/10"
+          className="pointer-events-none fixed z-40 border border-stone-400/70 bg-stone-500/10"
           style={{
             left: marqueeBox.l,
             top: marqueeBox.t,
@@ -1334,7 +1865,7 @@ export default function App() {
       )}
 
       {isRecording && (
-        <div className="absolute bottom-6 left-1/2 z-50 flex max-w-[94vw] -translate-x-1/2 items-center gap-2.5 overflow-hidden rounded-full border border-red-200/70 bg-white/90 py-2 pr-5 pl-3 whitespace-nowrap shadow-lg backdrop-blur-xl dark:border-red-500/30 dark:bg-stone-900/90">
+        <div className="absolute bottom-6 left-1/2 z-50 flex max-w-[94vw] -translate-x-1/2 animate-fade-in items-center gap-2.5 overflow-hidden rounded-full border border-red-200/70 bg-white/90 py-2 pr-5 pl-3 whitespace-nowrap shadow-lg backdrop-blur-xl dark:border-red-500/30 dark:bg-stone-900/90">
           <span className="relative flex h-3 w-3">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
             <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600" />

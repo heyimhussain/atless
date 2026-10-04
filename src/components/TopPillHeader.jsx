@@ -11,7 +11,6 @@ import {
   Layers,
   Trash2,
   Pencil,
-  CircleHelp,
   Moon,
   Sun,
   Sparkles,
@@ -158,9 +157,12 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
             aria-hidden
             className="h-6 w-6 shrink-0 text-stone-900 sm:h-7 sm:w-7 dark:text-stone-100"
           >
-            <rect x="13" y="13" width="38" height="38" rx="11" stroke="currentColor" strokeWidth="7" />
+            <rect x="30.75" y="10" width="2.5" height="36" rx="1.25" fill="currentColor" />
+            <path d="M34.5 12 L34.5 42 L52 42 Z" fill="currentColor" />
+            <path d="M29.5 18 L29.5 42 L12 42 Z" fill="currentColor" />
+            <path d="M20 49 Q28 41 36 49 T52 49" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
           </svg>
-          <span className="text-xs font-bold tracking-tight whitespace-nowrap text-stone-900 sm:text-[13px] dark:text-stone-100">
+          <span className="font-display text-xs font-medium tracking-tight whitespace-nowrap text-stone-900 sm:text-[13px] dark:text-stone-100">
             Atless
           </span>
         </span>
@@ -168,44 +170,46 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
         <span className="h-5 w-px shrink-0 bg-neutral-200 dark:bg-white/10" />
 
         <button
-          onClick={toggleDark}
-          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-          title={dark ? "Switch to light mode" : "Switch to dark mode"}
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-colors sm:h-8 sm:w-8 ${
-            dark
-              ? "bg-white/10 text-[rgb(250,160,22)] hover:bg-white hover:text-stone-900"
-              : "bg-neutral-100 text-blue-500 hover:bg-stone-900 hover:text-white"
-          }`}
-        >
-          {dark ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
-
-        <button
           onClick={() => (open ? hidePanel() : showPanel())}
           aria-expanded={open}
           aria-label="Show shortcuts"
-          title="Shortcuts (?)"
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-colors sm:h-8 sm:w-8 ${
+          title="Shortcuts"
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-all active:scale-90 sm:h-8 sm:w-8 ${
             open
               ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
               : "bg-neutral-100 text-stone-700 hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
           }`}
         >
-          <CircleHelp size={15} />
+          <span aria-hidden className="font-display text-[15px] font-semibold leading-none">
+            ?
+          </span>
         </button>
 
         <button
           onClick={onSummarize}
           disabled={summarizing}
           aria-label="Summarize canvas with Gemini"
-          title="Summarize canvas with Gemini"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 outline-none transition-colors hover:bg-stone-900 hover:text-white disabled:opacity-60 sm:h-8 sm:w-8 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
+          title="Summarize with Gemini"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 outline-none transition-all hover:bg-stone-900 hover:text-white active:scale-90 disabled:opacity-60 sm:h-8 sm:w-8 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
         >
           {summarizing ? (
             <Loader2 size={15} className="animate-spin" />
           ) : (
             <Sparkles size={15} />
           )}
+        </button>
+
+        <button
+          onClick={toggleDark}
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          title={dark ? "Switch to light mode" : "Switch to dark mode"}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-all active:scale-90 sm:h-8 sm:w-8 ${
+            dark
+              ? "bg-white/10 text-[rgb(250,160,22)] hover:bg-white hover:text-stone-900"
+              : "bg-neutral-100 text-blue-500 hover:bg-stone-900 hover:text-white"
+          }`}
+        >
+          {dark ? <Sun size={15} /> : <Moon size={15} />}
         </button>
       </div>
 

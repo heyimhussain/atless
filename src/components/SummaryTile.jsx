@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Sparkles, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 
-export default function SummaryTile({ tile, scale, selected, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop }) {
+export default function SummaryTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
   const [renaming, setRenaming] = useState(false);
 
   const commitName = (v) => {
@@ -48,8 +48,13 @@ export default function SummaryTile({ tile, scale, selected, onChange, onDelete,
       style={{ zIndex: 40 }} // summaries float with text at the top
     >
       <div
-        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-gradient-to-br from-blue-100/70 via-white to-green-50 backdrop-blur-md transition-shadow duration-150 dark:from-blue-950/70 dark:via-stone-900/70 dark:to-emerald-950/50 ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
+        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-gradient-to-br from-blue-100/70 via-white to-green-50 backdrop-blur-md transition-all duration-150 active:scale-[0.985] dark:from-blue-950/70 ${leaving ? "animate-tile-out" : "animate-tile-in"} dark:via-stone-900/70 dark:to-emerald-950/50 ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
         onMouseDown={(e) => onTileMouseDown(tile.id, e)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onTileContextMenu(tile.id, e.clientX, e.clientY);
+        }}
         onDoubleClick={(e) => e.stopPropagation()}
         onWheel={(e) => e.stopPropagation()}
       >
@@ -66,7 +71,7 @@ export default function SummaryTile({ tile, scale, selected, onChange, onDelete,
             {renaming ? (
               <TileName name={tile.name} placeholder="Gemini Synthesis" onCommit={commitName} />
             ) : tile.name ? (
-              <span className="max-w-[160px] truncate bg-[linear-gradient(to_right,#2563eb,#16a34a,#ca8a04,#dc2626)] bg-clip-text text-[11px] font-medium text-transparent dark:bg-[linear-gradient(to_right,#93c5fd,#6ee7b7,#fde047,#fca5a5)]">
+              <span className="max-w-[160px] truncate bg-[linear-gradient(to_right,#2563eb,#16a34a,#ca8a04,#dc2626)] bg-clip-text font-display text-[11px] font-medium text-transparent dark:bg-[linear-gradient(to_right,#93c5fd,#6ee7b7,#fde047,#fca5a5)]">
                 {tile.name}
               </span>
             ) : (
