@@ -904,21 +904,11 @@ export default function App() {
   const [sharing, setSharing] = useState(false);
 
   // Easter-egg otter (unlocked via the credits in the shortcut menu).
-  // Persisted so it survives refreshes; missing gif fails silently.
-  const [otterOn, setOtterOn] = useState(() => {
-    try {
-      return localStorage.getItem("atless-otter") === "1";
-    } catch {
-      return false;
-    }
-  });
+  // Session-only on purpose — a reload dismisses it. Missing gif fails
+  // silently.
+  const [otterOn, setOtterOn] = useState(false);
   const setOtter = useCallback((v) => {
     setOtterOn(v);
-    try {
-      localStorage.setItem("atless-otter", v ? "1" : "0");
-    } catch {
-      /* noop */
-    }
   }, []);
 
   const shareCanvas = useCallback(async () => {
@@ -2382,7 +2372,7 @@ export default function App() {
           aria-hidden="true"
           draggable={false}
           onError={() => setOtter(false)}
-          className="animate-otter pointer-events-none fixed right-6 bottom-6 h-44 w-auto max-w-[220px] rounded-2xl select-none"
+          className="animate-otter pointer-events-none fixed right-6 bottom-6 h-[88px] w-auto max-w-[110px] rounded-2xl select-none"
         />
       )}
       <TopPillHeader
