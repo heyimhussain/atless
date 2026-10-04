@@ -206,23 +206,57 @@ function connectionControls(a, b) {
   };
 }
 
-function connectionPath(a, b) {
+// Gap between opposite-direction curves (A→B and B→A render side by side).
+const PAIR_GAP = 6;
+
+// Lateral shift for one side of a bidirectional pair: each direction offsets
+// to its own side of the centerline so the pair reads as two parallel lines.
+// Unpaired connections get zero shift.
+function connectionLateral(a, b, paired) {
+  if (!paired) return { x: 0, y: 0 };
+  const dx = b.x + b.w / 2 - (a.x + a.w / 2);
+  const dy = b.y + b.h / 2 - (a.y + a.h / 2);
+  const len = Math.hypot(dx, dy) || 1;
+  const k = PAIR_GAP / 2;
+  return { x: (-dy / len) * k, y: (dx / len) * k };
+}
+
+// Slide an edge anchor along its edge (never off it) so arrowheads stay
+// glued to tiles while the pair separates.
+function slideAlongEdge(r, p, s) {
+  if (p.x === r.x || p.x === r.x + r.w) return { x: p.x, y: p.y + s.y };
+  return { x: p.x + s.x, y: p.y };
+}
+
+function connectionPathShifted(a, b, shift) {
   const { p0, p1, c1, c2 } = connectionControls(a, b);
-  return `M${p0.x},${p0.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${p1.x},${p1.y}`;
+  const q0 = slideAlongEdge(a, p0, shift);
+  const q1 = slideAlongEdge(b, p1, shift);
+  return `M${q0.x},${q0.y} C${c1.x + shift.x},${c1.y + shift.y} ${c2.x + shift.x},${c2.y + shift.y} ${q1.x},${q1.y}`;
+}
+
+function connectionPath(a, b) {
+  return connectionPathShifted(a, b, { x: 0, y: 0 });
 }
 
 // Does a connection's curve pass through rect r? Samples the cubic so a
-// marquee boxing just the line (no endpoints) still selects it.
-function connectionHitsRect(a, b, r) {
+// marquee boxing just the line (no endpoints) still selects it. Takes the
+// same lateral shift the renderer uses so paired lines test true geometry.
+function connectionHitsRect(a, b, r, shift) {
+  const s = shift || { x: 0, y: 0 };
   const { p0, p1, c1, c2 } = connectionControls(a, b);
+  const q0 = slideAlongEdge(a, p0, s);
+  const q1 = slideAlongEdge(b, p1, s);
+  const k1 = { x: c1.x + s.x, y: c1.y + s.y };
+  const k2 = { x: c2.x + s.x, y: c2.y + s.y };
   const N = 32;
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     const u = 1 - t;
     const x =
-      u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p1.x;
+      u * u * u * q0.x + 3 * u * u * t * k1.x + 3 * u * t * t * k2.x + t * t * t * q1.x;
     const y =
-      u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p1.y;
+      u * u * u * q0.y + 3 * u * u * t * k1.y + 3 * u * t * t * k2.y + t * t * t * q1.y;
     if (x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2) return true;
   }
   return false;
@@ -384,6 +418,8 @@ function CanvasSurface({
   }, [ctx, controls, viewRef, instanceRef, controlsRef]);
 
   const tileById = new Map(tiles.map((t) => [t.id, t]));
+  // Directed pairs (A→B plus B→A) render as two offset parallel lines.
+  const connPairKeys = new Set(connections.map((c) => `${c.from}→${c.to}`));
 
   // Real bounding box around all tiles so the arrow layer has true
   // dimensions instead of relying on zero-size overflow painting.
@@ -452,7 +488,11 @@ function CanvasSurface({
           const a = tileById.get(c.from);
           const b = tileById.get(c.to);
           if (!a || !b) return null;
-          const d = connectionPath(a, b);
+          const d = connectionPathShifted(
+            a,
+            b,
+            connectionLateral(a, b, connPairKeys.has(`${c.to}→${c.from}`)),
+          );
           const sel = selectedConnIds.includes(c.id);
           const leaving = leavingConnIds.includes(c.id);
           return (
@@ -1437,12 +1477,21 @@ export default function App() {
       const hitSet = new Set(hit);
       const byId = new Map(tilesRef.current.map((t) => [t.id, t]));
       const box = { x1: rx1, y1: ry1, x2: rx2, y2: ry2 };
+      const pairKeys = new Set(
+        connListRef.current.map((c) => `${c.from}→${c.to}`),
+      );
       const hitConns = connListRef.current
         .filter((c) => {
           if (hitSet.has(c.from) && hitSet.has(c.to)) return true;
           const a = byId.get(c.from);
           const b = byId.get(c.to);
-          return !!a && !!b && connectionHitsRect(a, b, box);
+          if (!a || !b) return false;
+          const shift = connectionLateral(
+            a,
+            b,
+            pairKeys.has(`${c.to}→${c.from}`),
+          );
+          return connectionHitsRect(a, b, box, shift);
         })
         .map((c) => c.id);
       const nextConns = m.ctrl
