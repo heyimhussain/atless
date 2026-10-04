@@ -102,7 +102,7 @@ export default function AudioTile({ tile, scale, selected, onChange, onDelete, o
       style={{ zIndex: 30 }} // stacking order: text (40) > audio (30) > video (20) > photo (10)
     >
       <div
-        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white/60 backdrop-blur-md transition-shadow duration-150 dark:bg-stone-900/60 ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(249,115,22,0.8),0_8px_24px_rgba(249,115,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
+        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white/60 backdrop-blur-md transition-shadow duration-150 dark:bg-stone-900/60 ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
         onMouseDown={(e) => onTileMouseDown(tile.id, e)}
         onDoubleClick={(e) => e.stopPropagation()}
         onWheel={(e) => e.stopPropagation()}

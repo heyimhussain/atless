@@ -906,7 +906,7 @@ export default function App() {
             }}
             placeholder="Search titles and notes…"
             spellCheck={false}
-            className="w-52 bg-transparent text-[13px] text-stone-800 outline-none placeholder:text-neutral-400 dark:text-stone-100 dark:placeholder:text-stone-500"
+            className="w-36 bg-transparent text-[13px] text-stone-800 outline-none placeholder:text-neutral-400 sm:w-52 dark:text-stone-100 dark:placeholder:text-stone-500"
           />
           <span className="shrink-0 text-[11px] tabular-nums whitespace-nowrap text-neutral-400 dark:text-stone-500">
             {query
@@ -973,11 +973,13 @@ export default function App() {
       </div>
 
       {tiles.length === 0 && (
-        <div className="pointer-events-none absolute top-1/2 left-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 rounded-2xl border border-neutral-200/70 bg-white/60 px-8 py-6 text-center shadow-sm backdrop-blur-sm select-none dark:border-white/10 dark:bg-stone-900/60">
-          <p className="text-sm font-medium text-neutral-600 dark:text-stone-200">Empty canvas</p>
-          <p className="max-w-[260px] text-xs leading-relaxed text-neutral-400 dark:text-stone-500">
-            Double-click anywhere to create a text note. Drag &amp; drop
-            images / video. Hold Space or press R to record audio.
+        <div className="pointer-events-none absolute top-1/2 left-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 rounded-2xl border border-neutral-200/70 bg-white/60 px-6 py-4.5 text-center shadow-sm backdrop-blur-sm select-none dark:border-white/10 dark:bg-stone-900/60">
+          <p className="text-base font-medium text-neutral-600 dark:text-stone-200">Welcome to <span className="font-bold">Atless</span>.</p>
+          <p className="max-w-[240px] text-sm leading-relaxed text-balance text-neutral-400 dark:text-stone-500">
+            more productivity, <span className="font-bold">less clutter</span>.
+          </p>
+          <p className="text-sm text-neutral-400 dark:text-stone-500">
+            double-click anywhere to begin.
           </p>
         </div>
       )}
@@ -996,7 +998,7 @@ export default function App() {
       )}
 
       {isRecording && (
-        <div className="absolute bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-red-200/70 bg-white/90 py-2 pr-5 pl-3 shadow-lg backdrop-blur-xl dark:border-red-500/30 dark:bg-stone-900/90">
+        <div className="absolute bottom-6 left-1/2 z-50 flex max-w-[94vw] -translate-x-1/2 items-center gap-2.5 overflow-hidden rounded-full border border-red-200/70 bg-white/90 py-2 pr-5 pl-3 whitespace-nowrap shadow-lg backdrop-blur-xl dark:border-red-500/30 dark:bg-stone-900/90">
           <span className="relative flex h-3 w-3">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
             <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600" />
@@ -1004,7 +1006,7 @@ export default function App() {
           <span className="text-xs font-medium text-neutral-700 tabular-nums dark:text-stone-200">
             Recording {recSecs.toFixed(0)}s
           </span>
-          <span className="text-[11px] text-neutral-400 dark:text-stone-500">
+          <span className="hidden min-w-0 truncate text-[11px] text-neutral-400 min-[420px]:inline dark:text-stone-500">
             release Space / press R to stop
           </span>
         </div>
