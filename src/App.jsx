@@ -791,7 +791,7 @@ export default function App() {
     }
     const key = import.meta.env.VITE_GEMINI_API_KEY;
     if (!key) {
-      showToast("Missing VITE_GEMINI_API_KEY — restart dev server after adding .env", 4000);
+      showToast("Missing VITE_GEMINI_API_KEY — add it to .env locally or GitHub Secrets for atless.tech", 4000);
       return;
     }
     setSummarizing(true);
@@ -1411,7 +1411,7 @@ export default function App() {
       const key = import.meta.env.VITE_ELEVENLABS_API_KEY;
       if (!key) {
         showToast(
-          "Missing VITE_ELEVENLABS_API_KEY — restart dev server after adding .env",
+          "Missing VITE_ELEVENLABS_API_KEY — add it to .env locally or GitHub Secrets for atless.tech",
           4000,
         );
         return;
@@ -1484,7 +1484,7 @@ export default function App() {
       const key = import.meta.env.VITE_ELEVENLABS_API_KEY;
       if (!key) {
         showToast(
-          "Missing VITE_ELEVENLABS_API_KEY — restart dev server after adding .env",
+          "Missing VITE_ELEVENLABS_API_KEY — add it to .env locally or GitHub Secrets for atless.tech",
           4000,
         );
         return;
@@ -1577,7 +1577,7 @@ export default function App() {
       const key = import.meta.env.VITE_GEMINI_API_KEY;
       if (!key) {
         showToast(
-          "Missing VITE_GEMINI_API_KEY — restart dev server after adding .env",
+          "Missing VITE_GEMINI_API_KEY — add it to .env locally or GitHub Secrets for atless.tech",
           4000,
         );
         return;
