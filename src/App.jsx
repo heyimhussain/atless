@@ -183,7 +183,9 @@ function edgeNormal(r, p) {
 // Smooth cubic arrow between two tiles. Both control points sit on the edge
 // normals, so the line always meets each tile perpendicularly — never sliding
 // parallel along an edge — while the bow still flexes with the layout.
-function connectionPath(a, b) {
+// Shared control points for a connection curve, so the SVG path and
+// marquee hit-testing use the exact same geometry.
+function connectionControls(a, b) {
   const acx = a.x + a.w / 2;
   const acy = a.y + a.h / 2;
   const bcx = b.x + b.w / 2;
@@ -194,13 +196,36 @@ function connectionPath(a, b) {
   const n1 = edgeNormal(b, p1);
   const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
   const bend = Math.min(Math.max(dist * 0.35, 24), 160);
-  const c1x = p0.x + n0.x * bend;
-  const c1y = p0.y + n0.y * bend;
-  // c2 stays OUTSIDE B (along its outward normal) so the final segment —
-  // and the arrowhead — travel into the tile, not away from it.
-  const c2x = p1.x + n1.x * bend;
-  const c2y = p1.y + n1.y * bend;
-  return `M${p0.x},${p0.y} C${c1x},${c1y} ${c2x},${c2y} ${p1.x},${p1.y}`;
+  return {
+    p0,
+    p1,
+    c1: { x: p0.x + n0.x * bend, y: p0.y + n0.y * bend },
+    // c2 stays OUTSIDE B (along its outward normal) so the final segment —
+    // and the arrowhead — travel into the tile, not away from it.
+    c2: { x: p1.x + n1.x * bend, y: p1.y + n1.y * bend },
+  };
+}
+
+function connectionPath(a, b) {
+  const { p0, p1, c1, c2 } = connectionControls(a, b);
+  return `M${p0.x},${p0.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${p1.x},${p1.y}`;
+}
+
+// Does a connection's curve pass through rect r? Samples the cubic so a
+// marquee boxing just the line (no endpoints) still selects it.
+function connectionHitsRect(a, b, r) {
+  const { p0, p1, c1, c2 } = connectionControls(a, b);
+  const N = 32;
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const u = 1 - t;
+    const x =
+      u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p1.x;
+    const y =
+      u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p1.y;
+    if (x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2) return true;
+  }
+  return false;
 }
 
 function kindOf(file) {
@@ -1394,10 +1419,18 @@ export default function App() {
         : hit;
       selectedRef.current = next;
       setSelectedIds(next);
-      // Links whose both endpoints land in the box get selected too.
+      // Links get selected when both endpoints land in the box OR the
+      // curve itself passes through it — so boxing just a line works.
       const hitSet = new Set(hit);
+      const byId = new Map(tilesRef.current.map((t) => [t.id, t]));
+      const box = { x1: rx1, y1: ry1, x2: rx2, y2: ry2 };
       const hitConns = connListRef.current
-        .filter((c) => hitSet.has(c.from) && hitSet.has(c.to))
+        .filter((c) => {
+          if (hitSet.has(c.from) && hitSet.has(c.to)) return true;
+          const a = byId.get(c.from);
+          const b = byId.get(c.to);
+          return !!a && !!b && connectionHitsRect(a, b, box);
+        })
         .map((c) => c.id);
       const nextConns = m.ctrl
         ? Array.from(new Set([...selectedConnRef.current, ...hitConns]))
