@@ -34,7 +34,7 @@ on a pannable, zoomable board that persists across visits.
 | Ctrl + A | Select all tiles |
 | Delete | Delete selected tiles / connections |
 | Hold Space, or press R | Record / stop voice note |
-| Right-click tile | Context menu (read aloud, transcribe, download, explain) |
+| Right-click tile (or the ⋯ button on YouTube tiles) | Context menu (read aloud, transcribe, download, explain, connect) |
 | Ctrl + F | Search titles, notes, transcripts |
 | Right-click → Make connection | Link two tiles with a curved arrow |
 | Esc | Cancel connection / close menus |

@@ -1934,8 +1934,9 @@ export default function App() {
 
   const handleTileContextMenu = useCallback((id, x, y) => {
     const t = tilesRef.current.find((t) => t.id === id);
-    if (!t || (t.type !== "text" && t.type !== "audio" && t.type !== "image"))
-      return;
+    if (!t) return;
+    // Every tile type gets a menu — TileMenu only shows the actions that
+    // apply (Make connection + Delete always render).
     openMenu({ x, y, id });
   }, [openMenu]);
 

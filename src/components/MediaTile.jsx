@@ -1,6 +1,6 @@
 import { Rnd } from "react-rnd";
 import { useState } from "react";
-import { GripHorizontal, ImageOff, Pencil, X } from "lucide-react";
+import { GripHorizontal, ImageOff, MoreVertical, Pencil, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 
 // Height of the tile's top drag-handle bar. The media area keeps the exact
@@ -82,17 +82,36 @@ export default function MediaTile({ tile, scale, selected, leaving, onChange, on
               <Pencil size={11} className="shrink-0 text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-stone-600" />
             )}
           </span>
-          <button
-            aria-label={`Delete ${tile.type}`}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(tile.id);
-            }}
-            className="no-drag flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
-          >
-            <X size={13} strokeWidth={2.5} />
-          </button>
+          <span className="flex shrink-0 items-center">
+            {/* YouTube bodies are sealed iframes — right-click never reaches
+                us there, so YouTube tiles get an explicit menu button. */}
+            {isYouTube && (
+              <button
+                aria-label="Tile actions"
+                title="Tile actions"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  onTileContextMenu(tile.id, r.left, r.bottom + 4);
+                }}
+                className="no-drag flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-neutral-100 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-white/10 dark:hover:text-stone-200"
+              >
+                <MoreVertical size={13} />
+              </button>
+            )}
+            <button
+              aria-label={`Delete ${tile.type}`}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(tile.id);
+              }}
+              className="no-drag flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+            >
+              <X size={13} strokeWidth={2.5} />
+            </button>
+          </span>
         </div>
 
         <div className="min-h-0 w-full flex-1 bg-neutral-100 dark:bg-black/50">
