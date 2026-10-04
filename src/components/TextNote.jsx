@@ -1,12 +1,27 @@
 import { Rnd } from "react-rnd";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GripHorizontal, Pencil, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 import { textTileFirstWord } from "../lib/tileName.js";
+import { highlightParts } from "../lib/highlight.jsx";
 
-export default function TextNote({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
+export default function TextNote({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, highlight }) {
   const [renaming, setRenaming] = useState(false);
   const fallbackName = textTileFirstWord(tile);
+  // Search highlighting inside a textarea needs a mirrored backdrop layer
+  // (textareas can't style ranges). Only mounted while searching.
+  const showHL = (highlight || "").trim().length > 0;
+  const taRef = useRef(null);
+  const bdRef = useRef(null);
+  const syncHLScroll = () => {
+    const ta = taRef.current;
+    const bd = bdRef.current;
+    if (ta && bd) {
+      bd.scrollTop = ta.scrollTop;
+      bd.scrollLeft = ta.scrollLeft;
+    }
+  };
+  useEffect(syncHLScroll, [tile.text, showHL]);
 
   const commitName = (v) => {
     setRenaming(false);
@@ -98,17 +113,32 @@ export default function TextNote({ tile, scale, selected, leaving, onChange, onD
         </div>
 
         {/* editable text — wraps and stays inside the tile */}
-        <textarea
-          autoFocus
-          value={tile.text}
-          onChange={(e) => onChange(tile.id, { text: e.target.value })}
-          onMouseDown={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          placeholder="Type something…"
-          rows={1}
-          className="no-drag h-full max-h-full min-h-0 w-full flex-1 resize-none overflow-auto bg-transparent p-2.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-stone-800 outline-none placeholder:text-neutral-300 dark:text-stone-100 dark:placeholder:text-stone-600"
-        />
+        <div className="relative min-h-0 w-full flex-1">
+          {showHL && (
+            <div
+              ref={bdRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 overflow-hidden p-2.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap"
+            >
+              {highlightParts(tile.text, highlight)}
+              {/* textareas keep a trailing newline's line; plain divs collapse it */}
+              {tile.text.endsWith("\n") ? "\n " : null}
+            </div>
+          )}
+          <textarea
+            ref={taRef}
+            autoFocus
+            value={tile.text}
+            onChange={(e) => onChange(tile.id, { text: e.target.value })}
+            onScroll={showHL ? syncHLScroll : undefined}
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            placeholder="Type something…"
+            rows={1}
+            className={`no-drag h-full w-full resize-none overflow-auto bg-transparent p-2.5 text-[13px] leading-relaxed break-words whitespace-pre-wrap outline-none placeholder:text-neutral-300 dark:placeholder:text-stone-600 ${showHL ? "text-transparent caret-stone-800 dark:caret-stone-100" : "text-stone-800 dark:text-stone-100"}`}
+          />
+        </div>
       </div>
     </Rnd>
   );

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
 import { GripHorizontal, X, Play, Pause, Mic, Pencil, Loader2 } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
+import { highlightParts } from "../lib/highlight.jsx";
 
 function fmt(s) {
   if (!isFinite(s) || s == null || s < 0) return "0:00";
@@ -10,7 +11,7 @@ function fmt(s) {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function AudioTile({ tile, scale, selected, busy, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
+export default function AudioTile({ tile, scale, selected, busy, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, highlight }) {
   const audioRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -212,7 +213,7 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
 
         {tile.transcript ? (
           <div className="no-drag min-h-0 flex-1 overflow-y-auto border-t border-neutral-100 px-3 py-1.5 text-[11px] leading-snug break-words whitespace-pre-wrap text-stone-600 dark:border-white/10 dark:text-stone-300">
-            {tile.transcript}
+            {highlight ? highlightParts(tile.transcript, highlight) : tile.transcript}
           </div>
         ) : busy ? (
           <div className="flex shrink-0 items-center gap-1.5 border-t border-neutral-100 px-3 py-1.5 text-[11px] text-neutral-400 dark:border-white/10 dark:text-stone-500">

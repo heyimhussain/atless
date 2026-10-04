@@ -372,6 +372,7 @@ function CanvasSurface({
   selectConnection,
   openMenu,
   connecting,
+  highlight,
 }) {
   const ctx = useTransformContext();
   const controls = useControls();
@@ -510,6 +511,7 @@ function CanvasSurface({
           leaving: leavingIds.includes(tile.id),
           onTileContextMenu,
           connecting,
+          highlight,
         };
         if (tile.type === "text") {
           return <TextNote key={tile.id} {...common} />;
@@ -2532,6 +2534,7 @@ export default function App() {
               openMenu={openMenu}
               onTileContextMenu={handleTileContextMenu}
               connecting={connecting}
+              highlight={searchOpen ? query.trim() : ""}
             />
           </TransformComponent>
         </TransformWrapper>

@@ -2,8 +2,9 @@ import { Rnd } from "react-rnd";
 import { useState } from "react";
 import { Sparkles, X } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
+import { highlightParts } from "../lib/highlight.jsx";
 
-export default function SummaryTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
+export default function SummaryTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, highlight }) {
   const [renaming, setRenaming] = useState(false);
 
   const commitName = (v) => {
@@ -93,7 +94,7 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
         </div>
 
         <div className="no-drag min-h-0 flex-1 overflow-y-auto p-3 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-stone-700 dark:text-stone-200">
-          {tile.text}
+          {highlight ? highlightParts(tile.text, highlight) : tile.text}
         </div>
       </div>
     </Rnd>
