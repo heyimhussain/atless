@@ -11,9 +11,13 @@
 
 :root {
   color-scheme: light;
+  --conn-stroke: #1c1917;
+  --conn-sel: #2563eb;
 }
 .dark {
   color-scheme: dark;
+  --conn-stroke: #ffffff;
+  --conn-sel: rgb(250, 160, 22);
 }
 
 html,
@@ -122,30 +126,56 @@ body {
   }
 }
 .welcome-glow {
+  /* ring mask: glow lives only on the outer band, never bleeding through
+     the card's translucent middle */
+  padding: 12px;
   background: conic-gradient(
     from var(--glow-angle),
     transparent 0deg,
-    rgba(59, 130, 246, 0.55) 60deg,
+    rgba(59, 130, 246, 1) 60deg,
     transparent 120deg,
     transparent 200deg,
-    rgba(59, 130, 246, 0.35) 260deg,
+    rgba(59, 130, 246, 0.8) 260deg,
     transparent 320deg
   );
-  filter: blur(10px);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  filter: blur(12px);
   animation:
-    glow-spin 5s linear infinite,
+    glow-spin 9s linear infinite,
     glow-pulse 2.8s ease-in-out infinite;
 }
 .dark .welcome-glow {
   background: conic-gradient(
     from var(--glow-angle),
     transparent 0deg,
-    rgba(250, 160, 22, 0.5) 60deg,
+    rgba(250, 160, 22, 1) 60deg,
     transparent 120deg,
     transparent 200deg,
-    rgba(250, 160, 22, 0.32) 260deg,
+    rgba(250, 160, 22, 0.75) 260deg,
     transparent 320deg
   );
+}
+
+/* Cursor-following glow inside the welcome card — same punch as the edge
+   aura, driven by --mx/--my custom properties set from JS. */
+.card-cursor-glow {
+  background: radial-gradient(
+    340px circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, currentColor 15%, transparent),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+.card-cursor-glow.on {
+  opacity: 1;
 }
 
 /* react-zoom-pan-pinch wrapper must fill viewport */

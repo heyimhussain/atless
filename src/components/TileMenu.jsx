@@ -1,4 +1,4 @@
-import { Download, FileText, Loader2, Sparkles, Square, Trash2, Volume2 } from "lucide-react";
+import { Download, FileText, Loader2, Sparkles, Spline, Square, Trash2, Volume2 } from "lucide-react";
 
 function MenuButton({ icon: Icon, label, onClick, disabled, spin, danger }) {
   return (
@@ -39,6 +39,7 @@ export default function TileMenu({
   onTranscribe,
   onDownload,
   onExplain,
+  onConnect,
   onDelete,
 }) {
   const left = Math.max(8, Math.min(x, window.innerWidth - 228));
@@ -88,6 +89,7 @@ export default function TileMenu({
           onClick={onExplain}
         />
       )}
+      <MenuButton icon={Spline} label="Make connection" onClick={onConnect} />
       <MenuButton icon={Trash2} label="Delete" danger onClick={onDelete} />
     </div>
   );

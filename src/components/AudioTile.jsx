@@ -75,16 +75,30 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
       dragHandleClassName="tile-drag-handle"
       cancel=".no-drag"
       className="tile-rnd"
-      enableResizing={{
-        top: false,
-        right: true,
-        bottom: false,
-        left: true,
-        topRight: false,
-        bottomRight: false,
-        bottomLeft: false,
-        topLeft: false,
-      }}
+      enableResizing={
+        tile.transcript
+          ? {
+              top: true,
+              right: true,
+              bottom: true,
+              left: true,
+              topRight: true,
+              bottomRight: true,
+              bottomLeft: true,
+              topLeft: true,
+            }
+          : {
+              // Untranscribed tiles keep a fixed height — horizontal only.
+              top: false,
+              right: true,
+              bottom: false,
+              left: true,
+              topRight: false,
+              bottomRight: false,
+              bottomLeft: false,
+              topLeft: false,
+            }
+      }
       onDragStart={(e, data) => onTileDragStart(tile.id, e, data)}
       onDrag={(e, data) => onTileDrag(tile.id, e, data)}
       onDragStop={(e, d) => onTileDragStop(tile.id, e, d)}
@@ -104,6 +118,7 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
       <div
         className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white/60 backdrop-blur-md transition-all duration-150 active:scale-[0.985] dark:bg-stone-900/60 ${leaving ? "animate-tile-out" : "animate-tile-in"} ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
         onMouseDown={(e) => onTileMouseDown(tile.id, e)}
+        data-tile-id={tile.id}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -113,7 +128,7 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
         onWheel={(e) => e.stopPropagation()}
       >
         <div
-          className="tile-drag-handle group flex shrink-0 cursor-move items-center justify-between border-b border-neutral-100 bg-neutral-50/80 px-2 py-1 dark:border-white/5 dark:bg-white/5"
+          className="tile-drag-handle group flex h-7 shrink-0 cursor-move items-center justify-between border-b border-neutral-100 bg-neutral-50/80 px-2 dark:border-white/5 dark:bg-white/5"
           onDoubleClick={(e) => {
             e.stopPropagation();
             if (e.target.closest?.("button, input, textarea")) return;
@@ -155,7 +170,9 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
             </span>
           </div>
         ) : (
-        <div className="flex min-h-0 flex-1 items-center gap-3 px-3">
+        <div
+          className="flex h-[104px] shrink-0 items-center gap-3 px-3"
+        >
           <button
             aria-label={playing ? "Pause" : "Play"}
             onMouseDown={(e) => e.stopPropagation()}
@@ -194,7 +211,7 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
         )}
 
         {tile.transcript ? (
-          <div className="no-drag max-h-20 min-h-0 shrink-0 overflow-y-auto border-t border-neutral-100 px-3 py-1.5 text-[11px] leading-snug break-words whitespace-pre-wrap text-stone-600 dark:border-white/10 dark:text-stone-300">
+          <div className="no-drag min-h-0 flex-1 overflow-y-auto border-t border-neutral-100 px-3 py-1.5 text-[11px] leading-snug break-words whitespace-pre-wrap text-stone-600 dark:border-white/10 dark:text-stone-300">
             {tile.transcript}
           </div>
         ) : busy ? (

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   MousePointer2,
   ZoomIn,
@@ -11,6 +12,9 @@ import {
   Layers,
   Trash2,
   Pencil,
+  Spline,
+  Waypoints,
+  Heart,
   Moon,
   Sun,
   Sparkles,
@@ -33,7 +37,23 @@ const HELP_ITEMS = [
   { icon: Trash2, combos: [["Del"]], desc: "Delete selected" },
   { icon: Search, combos: [["Ctrl", "F"]], desc: "Search tiles" },
   { icon: Pencil, combos: [["Double-click", "Title"]], desc: "Rename tile" },
+  { icon: Spline, combos: [["Right-click"], ["Connect"]], desc: "Link tiles with an arrow" },
 ];
+
+function connTileName(t) {
+  if (!t) return "?";
+  if (t.name) return t.name;
+  return (
+    {
+      text: "Text note",
+      image: "Image",
+      video: "Video",
+      audio: "Voice note",
+      youtube: "YouTube",
+      summary: "Summary",
+    }[t.type] || t.type
+  );
+}
 
 function HelpItem({ icon: Icon, combos, desc }) {
   return (
@@ -66,7 +86,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader({ onSummarize, summarizing }) {
+export default function TopPillHeader({ onSummarize, summarizing, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [dark, setDark] = useState(
@@ -77,17 +97,42 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
   const helpRef = useRef(null);
   const hideTimer = useRef(null);
 
+  const [connOpen, setConnOpen] = useState(false);
+  const [connShown, setConnShown] = useState(false);
+  const connTimer = useRef(null);
+
+  const showConn = useCallback(() => {
+    if (connTimer.current) {
+      clearTimeout(connTimer.current);
+      connTimer.current = null;
+    }
+    setConnOpen(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setConnShown(true));
+    });
+  }, []);
+
+  const hideConn = useCallback(() => {
+    setConnShown(false);
+    if (connTimer.current) clearTimeout(connTimer.current);
+    connTimer.current = setTimeout(() => {
+      setConnOpen(false);
+      connTimer.current = null;
+    }, 180);
+  }, []);
+
   const showPanel = useCallback(() => {
     if (hideTimer.current) {
       clearTimeout(hideTimer.current);
       hideTimer.current = null;
     }
+    hideConn();
     setOpen(true);
     // Let the mount commit before flipping the transition state.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => setShown(true));
     });
-  }, []);
+  }, [hideConn]);
 
   const hidePanel = useCallback(() => {
     setShown(false);
@@ -101,6 +146,7 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
   useEffect(
     () => () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (connTimer.current) clearTimeout(connTimer.current);
     },
     [],
   );
@@ -147,6 +193,8 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
     }
   };
 
+  const tileMap = new Map(tiles.map((t) => [t.id, t]));
+
   return (
     <header ref={helpRef} data-open={open ? "1" : "0"} className="pointer-events-auto absolute top-4 left-1/2 z-50 -translate-x-1/2">
       <div className="flex items-center gap-1.5 overflow-hidden rounded-full border border-white/60 bg-white/70 py-1.5 pr-1.5 pl-3 shadow-[0_8px_30px_rgb(0,0,0,0.06)] ring-1 ring-black/5 backdrop-blur-xl sm:gap-2 sm:py-2 sm:pr-2 sm:pl-4 dark:border-white/10 dark:bg-stone-900/70 dark:ring-white/10 dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)]">
@@ -183,6 +231,24 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
           <span aria-hidden className="font-display text-[15px] font-semibold leading-none">
             ?
           </span>
+        </button>
+
+        <button
+          onClick={() => {
+            hidePanel();
+            if (connOpen) hideConn();
+            else showConn();
+          }}
+          aria-expanded={connOpen}
+          aria-label="Connections"
+          title="Connections"
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-all active:scale-90 sm:h-8 sm:w-8 ${
+            connOpen
+              ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
+              : "bg-neutral-100 text-stone-700 hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
+          }`}
+        >
+          <Waypoints size={15} />
         </button>
 
         <button
@@ -228,10 +294,60 @@ export default function TopPillHeader({ onSummarize, summarizing }) {
               <HelpItem key={item.desc} {...item} />
             ))}
           </div>
-          <div className="mt-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
-            © 2026 Hussain Shah Hashmi - Designed with React & Vite.
+          <div className="mt-1 flex items-center justify-center gap-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
+            <span>© 2026 Hussain Shah Hashmi - Made with</span>
+            <Heart size={11} fill="currentColor" className="shrink-0" />
           </div>
         </div>
+      )}
+
+      {connOpen &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-label="Connections"
+          className={`fixed top-4 right-4 z-50 w-max max-w-[min(420px,92vw)] rounded-2xl border border-white/60 bg-white/85 p-2 shadow-xl ring-1 ring-black/5 backdrop-blur-xl transition-all duration-200 ease-out dark:border-white/10 dark:bg-stone-900/90 dark:ring-white/10 ${
+            connShown
+              ? "translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
+          }`}
+        >
+          <div className="px-2.5 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase dark:text-stone-500">
+            Connections
+          </div>
+          {connections.length === 0 ? (
+            <div className="px-2.5 py-2 text-xs text-neutral-500 dark:text-stone-400">
+              No connections yet.<br />
+              Right-click a tile → Make connection.
+            </div>
+          ) : (
+            <div className="max-h-[40vh] overflow-y-auto">
+              {connections.map((c) => {
+                const a = tileMap.get(c.from);
+                const b = tileMap.get(c.to);
+                if (!a || !b) return null;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => onFocusConnection?.(c)}
+                    className="flex w-full items-center gap-1.5 rounded-xl px-2.5 py-2 text-left text-[13px] transition hover:bg-neutral-100 dark:hover:bg-white/10"
+                  >
+                    <span className="min-w-0 max-w-[170px] shrink truncate font-medium text-stone-700 dark:text-stone-200">
+                      {connTileName(a)}
+                    </span>
+                    <span aria-hidden className="shrink-0 text-neutral-400 dark:text-stone-500">
+                      →
+                    </span>
+                    <span className="min-w-0 max-w-[170px] shrink truncate font-medium text-stone-700 dark:text-stone-200">
+                      {connTileName(b)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>,
+        document.body,
       )}
     </header>
   );

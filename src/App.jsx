@@ -5,7 +5,7 @@ import {
   useTransformContext,
   useControls,
 } from "react-zoom-pan-pinch";
-import { Search, Type, X } from "lucide-react";
+import { Search, Trash2, Type, X } from "lucide-react";
 import TopPillHeader from "./components/TopPillHeader.jsx";
 import TextNote from "./components/TextNote.jsx";
 import MediaTile, { MEDIA_HEADER_H } from "./components/MediaTile.jsx";
@@ -27,6 +27,15 @@ const GEMINI_MODEL = "gemini-3.8-flash";
 // may 422 — flip TTS_MODEL_ID back if needed).
 const TTS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
 const TTS_MODEL_ID = "eleven_multilingual_v2";
+
+// Estimate an audio tile's full height so transcripts fit without
+// scrolling: header + player + one padded block per wrapped line.
+// Slightly generous on purpose — clipping is worse than whitespace.
+function transcriptTileHeight(text, width) {
+  const cpl = Math.max(20, Math.floor(((width || AUDIO_W) - 38) / 4.8));
+  const lines = Math.max(1, Math.ceil(String(text || "").length / cpl));
+  return Math.ceil(30 + 104 + 14 + lines * 17);
+}
 
 function fitBox(nw, nh, max = MEDIA_MAX) {
   if (!nw || !nh) return { w: 320, h: 240 };
@@ -151,6 +160,49 @@ function tileImagePart(tile) {
   return { inline_data: { mime_type: mime, data: m[3] } };
 }
 
+// Anchor a connection endpoint to the edge of rect r facing (tx, ty).
+function edgeAnchor(r, tx, ty) {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? { x: r.x + r.w, y: cy } : { x: r.x, y: cy };
+  }
+  return dy >= 0 ? { x: cx, y: r.y + r.h } : { x: cx, y: r.y };
+}
+
+// Outward unit normal of the edge that point p (an edge midpoint) sits on.
+function edgeNormal(r, p) {
+  if (p.y === r.y) return { x: 0, y: -1 };
+  if (p.y === r.y + r.h) return { x: 0, y: 1 };
+  if (p.x === r.x) return { x: -1, y: 0 };
+  return { x: 1, y: 0 };
+}
+
+// Smooth cubic arrow between two tiles. Both control points sit on the edge
+// normals, so the line always meets each tile perpendicularly — never sliding
+// parallel along an edge — while the bow still flexes with the layout.
+function connectionPath(a, b) {
+  const acx = a.x + a.w / 2;
+  const acy = a.y + a.h / 2;
+  const bcx = b.x + b.w / 2;
+  const bcy = b.y + b.h / 2;
+  const p0 = edgeAnchor(a, bcx, bcy);
+  const p1 = edgeAnchor(b, acx, acy);
+  const n0 = edgeNormal(a, p0);
+  const n1 = edgeNormal(b, p1);
+  const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+  const bend = Math.min(Math.max(dist * 0.35, 24), 160);
+  const c1x = p0.x + n0.x * bend;
+  const c1y = p0.y + n0.y * bend;
+  // c2 stays OUTSIDE B (along its outward normal) so the final segment —
+  // and the arrowhead — travel into the tile, not away from it.
+  const c2x = p1.x + n1.x * bend;
+  const c2y = p1.y + n1.y * bend;
+  return `M${p0.x},${p0.y} C${c1x},${c1y} ${c2x},${c2y} ${p1.x},${p1.y}`;
+}
+
 function kindOf(file) {
   const t = (file.type || "").toLowerCase();
   const n = (file.name || "").toLowerCase();
@@ -171,6 +223,41 @@ function isEditableTarget(e) {
 }
 
 const STORAGE_KEY = "spatial-canvas-tiles-v1";
+const CONN_KEY = "atless-connections-v1";
+
+function loadConnections(tiles) {
+  try {
+    const raw = localStorage.getItem(CONN_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const ids = new Set(tiles.map((t) => t.id));
+    const seen = new Set();
+    return parsed
+      .filter((c) => {
+        if (
+          !c ||
+          typeof c.from !== "string" ||
+          typeof c.to !== "string" ||
+          c.from === c.to
+        )
+          return false;
+        if (!ids.has(c.from) || !ids.has(c.to)) return false;
+        const k = `${c.from}→${c.to}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .map((c) => ({
+        id:
+          typeof c.id === "string" ? c.id : `conn-${c.from}-${c.to}`,
+        from: c.from,
+        to: c.to,
+      }));
+  } catch {
+    return [];
+  }
+}
 
 function fileToDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -199,32 +286,38 @@ function loadTiles() {
             t.type === "youtube" ||
             t.type === "summary"),
       )
-      .map((t, i) => ({
-        id: typeof t.id === "string" ? t.id : `restored-${Date.now()}-${i}`,
-        type: t.type,
-        x: Number.isFinite(+t.x) ? +t.x : (i % 5) * 40,
-        y: Number.isFinite(+t.y) ? +t.y : (i % 5) * 40,
-        w: Number.isFinite(+t.w) && +t.w > 0 ? +t.w : 260,
-        // Audio tiles have a fixed height (vertical resize is disabled),
-        // so normalize any legacy taller drops to the recording size.
-        h:
-          t.type === "audio"
-            ? AUDIO_H
-            : Number.isFinite(+t.h) && +t.h > 0
-              ? +t.h
-              : 160,
-        text: typeof t.text === "string" ? t.text : "",
-        transcript: typeof t.transcript === "string" ? t.transcript : "",
-        src: typeof t.src === "string" ? t.src : undefined,
-        // Legacy text notes were saved with name "text" — treat as unnamed.
-        name:
-          typeof t.name === "string" &&
-          !(t.type === "text" && t.name === "text")
-            ? t.name
-            : "",
-        ratio:
-          Number.isFinite(+t.ratio) && +t.ratio > 0 ? +t.ratio : undefined,
-      }));
+      .map((t, i) => {
+        const w = Number.isFinite(+t.w) && +t.w > 0 ? +t.w : 260;
+        const transcript =
+          typeof t.transcript === "string" ? t.transcript : "";
+        return {
+          id: typeof t.id === "string" ? t.id : `restored-${Date.now()}-${i}`,
+          type: t.type,
+          x: Number.isFinite(+t.x) ? +t.x : (i % 5) * 40,
+          y: Number.isFinite(+t.y) ? +t.y : (i % 5) * 40,
+          w,
+          // Audio tiles auto-fit their transcripts, so recompute height.
+          h:
+            t.type === "audio"
+              ? transcript
+                ? transcriptTileHeight(transcript, w)
+                : AUDIO_H
+              : Number.isFinite(+t.h) && +t.h > 0
+                ? +t.h
+                : 160,
+          text: typeof t.text === "string" ? t.text : "",
+          transcript,
+          src: typeof t.src === "string" ? t.src : undefined,
+          // Legacy text notes were saved with name "text" — treat as unnamed.
+          name:
+            typeof t.name === "string" &&
+            !(t.type === "text" && t.name === "text")
+              ? t.name
+              : "",
+          ratio:
+            Number.isFinite(+t.ratio) && +t.ratio > 0 ? +t.ratio : undefined,
+        };
+      });
   } catch {
     return [];
   }
@@ -248,6 +341,11 @@ function CanvasSurface({
   busyIds,
   onTileContextMenu,
   leavingIds,
+  connections,
+  selectedConnIds,
+  leavingConnIds,
+  selectConnection,
+  openMenu,
 }) {
   const ctx = useTransformContext();
   const controls = useControls();
@@ -258,10 +356,114 @@ function CanvasSurface({
     controlsRef.current = controls;
   }, [ctx, controls, viewRef, instanceRef, controlsRef]);
 
+  const tileById = new Map(tiles.map((t) => [t.id, t]));
+
+  // Real bounding box around all tiles so the arrow layer has true
+  // dimensions instead of relying on zero-size overflow painting.
+  let bbX1 = Infinity;
+  let bbY1 = Infinity;
+  let bbX2 = -Infinity;
+  let bbY2 = -Infinity;
+  for (const t of tiles) {
+    if (!Number.isFinite(t.x) || !Number.isFinite(t.y)) continue;
+    const w = Number.isFinite(t.w) ? t.w : 0;
+    const h = Number.isFinite(t.h) ? t.h : 0;
+    if (t.x < bbX1) bbX1 = t.x;
+    if (t.y < bbY1) bbY1 = t.y;
+    if (t.x + w > bbX2) bbX2 = t.x + w;
+    if (t.y + h > bbY2) bbY2 = t.y + h;
+  }
+  if (!isFinite(bbX1)) {
+    bbX1 = 0;
+    bbY1 = 0;
+    bbX2 = 0;
+    bbY2 = 0;
+  }
+  const BB_PAD = 60;
+  const bb = {
+    x: bbX1 - BB_PAD,
+    y: bbY1 - BB_PAD,
+    w: bbX2 - bbX1 + BB_PAD * 2,
+    h: bbY2 - bbY1 + BB_PAD * 2,
+  };
+
   return (
     // Zero-size anchor: tiles are absolutely positioned, so the transform
     // layer stays tiny and pans at full framerate (no giant texture).
     <div className="relative h-0 w-0">
+      {/* Connection arrows: rendered under tiles, paths recomputed from
+          live tile geometry every render so they track drags. */}
+      <svg
+        aria-hidden="true"
+        className="pointer-events-none absolute"
+        style={{
+          left: bb.x,
+          top: bb.y,
+          width: bb.w,
+          height: bb.h,
+          overflow: "visible",
+        }}
+      >
+        <defs>
+          <marker
+            id="atless-conn-arrow"
+            viewBox="0 0 10 10"
+            refX="7.5"
+            refY="5"
+            markerWidth="6.5"
+            markerHeight="6.5"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 0 L10 5 L0 10 z" style={{ fill: "var(--conn-stroke)" }} />
+          </marker>
+        </defs>
+        <g transform={`translate(${-bb.x},${-bb.y})`}>
+        {connections.map((c) => {
+          const a = tileById.get(c.from);
+          const b = tileById.get(c.to);
+          if (!a || !b) return null;
+          const d = connectionPath(a, b);
+          const sel = selectedConnIds.includes(c.id);
+          const leaving = leavingConnIds.includes(c.id);
+          return (
+            <g key={c.id}>
+              {/* fat invisible hit area */}
+              <path
+                d={d}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={14}
+                className="conn-hit"
+                style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (e.ctrlKey || e.metaKey) selectConnection(c.id, true);
+                  else selectConnection(c.id, false);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openMenu({ x: e.clientX, y: e.clientY, id: c.id });
+                }}
+              />
+              <path
+                d={d}
+                fill="none"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                markerEnd="url(#atless-conn-arrow)"
+                className={leaving ? "opacity-0" : "opacity-100"}
+                style={{
+                  stroke: sel ? "var(--conn-sel)" : "var(--conn-stroke)",
+                  transition: "opacity 150ms ease-out",
+                  pointerEvents: "none",
+                }}
+              />
+            </g>
+          );
+        })}
+        </g>
+      </svg>
 
       {tiles.map((tile) => {
         const common = {
@@ -296,6 +498,10 @@ function CanvasSurface({
 
 export default function App() {
   const [tiles, setTiles] = useState(loadTiles);
+  const [connections, setConnections] = useState(() =>
+    loadConnections(loadTiles()),
+  );
+  const connRef = useRef(0);
   const [scale, setScale] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
   const [recSecs, setRecSecs] = useState(0);
@@ -315,6 +521,10 @@ export default function App() {
   const [isDraggingTile, setIsDraggingTile] = useState(false);
   // Last known cursor position (client coords) — audio lands here on stop.
   const cursorRef = useRef(null);
+  const cardRef = useRef(null);
+  const cardGlowRef = useRef(null);
+  const glowTarget = useRef({ x: 0, y: 0 });
+  const glowCur = useRef({ x: 0, y: 0 });
 
   // ---- tile selection (single click, ctrl-toggle, marquee box) ----
   const [selectedIds, setSelectedIds] = useState([]);
@@ -330,10 +540,59 @@ export default function App() {
   // Remembers the last quota warning so an oversized canvas warns once.
   const persistWarnRef = useRef(null);
 
+  // ---- connection selection (independent from tile selection) ----
+  const [selectedConnIds, setSelectedConnIds] = useState([]);
+  const selectedConnRef = useRef([]);
+  const [leavingConnIds, setLeavingConnIds] = useState([]);
+  const connLeaveTimer = useRef(null);
+  const pendingConnRemoveRef = useRef(new Set());
+
+  const clearConnSelection = useCallback(() => {
+    if (selectedConnRef.current.length === 0) return;
+    selectedConnRef.current = [];
+    setSelectedConnIds([]);
+  }, []);
+
+  const selectConnection = useCallback((id, additive) => {
+    selectedRef.current = [];
+    setSelectedIds([]);
+    const cur = selectedConnRef.current;
+    const next = additive
+      ? cur.includes(id)
+        ? cur.filter((x) => x !== id)
+        : [...cur, id]
+      : [id];
+    selectedConnRef.current = next;
+    setSelectedConnIds(next);
+  }, []);
+
+  const removeConns = useCallback((ids) => {
+    const list = [...new Set(ids)];
+    if (list.length === 0) return;
+    for (const id of list) pendingConnRemoveRef.current.add(id);
+    const kept = selectedConnRef.current.filter(
+      (x) => !pendingConnRemoveRef.current.has(x),
+    );
+    selectedConnRef.current = kept;
+    setSelectedConnIds(kept);
+    setLeavingConnIds((prev) => [
+      ...prev,
+      ...list.filter((x) => !prev.includes(x)),
+    ]);
+    if (connLeaveTimer.current) clearTimeout(connLeaveTimer.current);
+    connLeaveTimer.current = setTimeout(() => {
+      const doomed = new Set(pendingConnRemoveRef.current);
+      pendingConnRemoveRef.current.clear();
+      setConnections((prev) => prev.filter((c) => !doomed.has(c.id)));
+      setLeavingConnIds((prev) => prev.filter((x) => !doomed.has(x)));
+    }, 180);
+  }, []);
+
   const selectOnly = useCallback((id) => {
     selectedRef.current = [id];
     setSelectedIds([id]);
-  }, []);
+    clearConnSelection();
+  }, [clearConnSelection]);
 
   const toggleSelect = useCallback((id) => {
     const next = selectedRef.current.includes(id)
@@ -341,13 +600,19 @@ export default function App() {
       : [...selectedRef.current, id];
     selectedRef.current = next;
     setSelectedIds(next);
-  }, []);
+    clearConnSelection();
+  }, [clearConnSelection]);
 
   const clearSelection = useCallback(() => {
-    if (selectedRef.current.length === 0) return;
+    if (
+      selectedRef.current.length === 0 &&
+      selectedConnRef.current.length === 0
+    )
+      return;
     selectedRef.current = [];
     setSelectedIds([]);
-  }, []);
+    clearConnSelection();
+  }, [clearConnSelection]);
 
   // ---- canvas search (Ctrl+F): matches tile titles + note text, pans to hits ----
   const [searchOpen, setSearchOpen] = useState(false);
@@ -403,6 +668,46 @@ export default function App() {
     setQuery("");
     setMatchIdx(-1);
   }, []);
+
+  // Jump to a connection: select the connection itself and fit both
+  // tiles in view.
+  const focusConnection = useCallback((conn) => {
+    const byId = new Map(tilesRef.current.map((t) => [t.id, t]));
+    const a = byId.get(conn.from);
+    const b = byId.get(conn.to);
+    if (!a || !b) return;
+    selectConnection(conn.id, false);
+    const setT = controlsRef.current?.setTransform;
+    const inst = instanceRef.current;
+    const wrapper = inst?.wrapperComponent;
+    if (setT && wrapper && inst?.state) {
+      const rect = wrapper.getBoundingClientRect();
+      const pad = 140;
+      const x1 = Math.min(a.x, b.x);
+      const y1 = Math.min(a.y, b.y);
+      const x2 = Math.max(a.x + a.w, b.x + b.w);
+      const y2 = Math.max(a.y + a.h, b.y + b.h);
+      const bw = Math.max(x2 - x1, 1);
+      const bh = Math.max(y2 - y1, 1);
+      const s = Math.min(
+        Math.max(Math.min((rect.width - pad) / bw, (rect.height - pad) / bh), 0.2),
+        1.5,
+      );
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y2) / 2;
+      try {
+        void setT(
+          rect.width / 2 - cx * s,
+          rect.height / 2 - cy * s,
+          s,
+          400,
+          "easeOut",
+        );
+      } catch {
+        /* noop */
+      }
+    }
+  }, [selectConnection]);
 
   const nextId = useCallback((prefix) => {
     idRef.current += 1;
@@ -481,7 +786,7 @@ export default function App() {
       }
     }
     if (lines.length === 0) {
-      showToast("Add some notes first to summarize!");
+      showToast("Add some tiles first to summarize!");
       return;
     }
     const key = import.meta.env.VITE_GEMINI_API_KEY;
@@ -565,15 +870,64 @@ export default function App() {
     }
   }, [summarizing, showToast, clientToContent, nextId]);
 
+  // ---- tile connections: pick a source from its menu, then click a target ----
+  const [connecting, setConnecting] = useState(null); // source tile id
+
+  const clearToast = useCallback(() => {
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current);
+      toastTimer.current = null;
+    }
+    setToast(null);
+  }, []);
+
+  const cancelConnecting = useCallback(() => {
+    setConnecting(null);
+    clearToast();
+  }, [clearToast]);
+
+  const createConnection = useCallback((fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return;
+    setConnections((prev) => {
+      // Directed: A→B and B→A are distinct links sharing one curve.
+      if (prev.some((c) => c.from === fromId && c.to === toId)) return prev;
+      connRef.current += 1;
+      return [
+        ...prev,
+        { id: `conn-${Date.now()}-${connRef.current}`, from: fromId, to: toId },
+      ];
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!connecting) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") cancelConnecting();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [connecting, cancelConnecting]);
+
   // Runs on tile mousedown (bubbles up from the drag handle — never blocked,
   // so Rnd still receives it). Ctrl/Cmd toggles, otherwise select exclusively.
   const handleTileMouseDown = useCallback(
     (id, e) => {
+      if (connecting) {
+        if (id !== connecting) {
+          createConnection(connecting, id);
+          showToast("Tiles connected");
+          selectOnly(id);
+        } else {
+          clearToast();
+        }
+        setConnecting(null);
+        return;
+      }
       if (e.target.closest?.(".no-drag")) return;
       if (e.ctrlKey || e.metaKey) toggleSelect(id);
       else if (!selectedRef.current.includes(id)) selectOnly(id);
     },
-    [toggleSelect, selectOnly],
+    [connecting, createConnection, showToast, clearToast, selectOnly, toggleSelect],
   );
 
   // Fires on every pan / zoom — keeps the tile drag scale and
@@ -747,9 +1101,11 @@ export default function App() {
     const dx = d.x - snap.atStart[id].x;
     const dy = d.y - snap.atStart[id].y;
     if (dx === 0 && dy === 0) return;
+    // Move the whole group live — including the dragged tile itself, using
+    // the exact values Rnd already holds, so nothing fights or jumps.
     setTiles((prev) =>
       prev.map((t) =>
-        t.id !== id && snap.ids.includes(t.id)
+        snap.ids.includes(t.id)
           ? { ...t, x: snap.atStart[t.id].x + dx, y: snap.atStart[t.id].y + dy }
           : t,
       ),
@@ -783,18 +1139,25 @@ export default function App() {
   }, []);
 
   // Marquee: plain background press-and-drag (Shift is reserved for panning).
-  const handleWrapperMouseDown = useCallback((e) => {
-    if (e.button !== 0 || e.shiftKey) return;
-    if (e.target.closest?.(".tile-rnd")) return;
-    if (isEditableTarget(e)) return;
-    e.preventDefault();
-    marqueeRef.current = {
-      x1: e.clientX,
-      y1: e.clientY,
-      ctrl: e.ctrlKey || e.metaKey,
-      moved: false,
-    };
-  }, []);
+  const handleWrapperMouseDown = useCallback(
+    (e) => {
+      if (e.button !== 0 || e.shiftKey) return;
+      if (connecting) {
+        cancelConnecting();
+        return;
+      }
+      if (e.target.closest?.(".tile-rnd")) return;
+      if (isEditableTarget(e)) return;
+      e.preventDefault();
+      marqueeRef.current = {
+        x1: e.clientX,
+        y1: e.clientY,
+        ctrl: e.ctrlKey || e.metaKey,
+        moved: false,
+      };
+    },
+    [connecting, cancelConnecting],
+  );
 
   useEffect(() => {
     const onMove = (e) => {
@@ -840,6 +1203,7 @@ export default function App() {
         : hit;
       selectedRef.current = next;
       setSelectedIds(next);
+      clearConnSelection();
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -847,7 +1211,7 @@ export default function App() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [clientToContent, clearSelection]);
+  }, [clientToContent, clearSelection, clearConnSelection]);
 
   // File drops work anywhere in the window — no bounded drop zone,
   // no highlight overlay. preventDefault also stops the browser
@@ -927,6 +1291,9 @@ export default function App() {
         return prev.filter((t) => !doomed.has(t.id));
       });
       setLeavingIds((prev) => prev.filter((x) => !doomed.has(x)));
+      setConnections((prev) =>
+        prev.filter((c) => !doomed.has(c.from) && !doomed.has(c.to)),
+      );
     }, 190);
   }, []);
 
@@ -990,17 +1357,23 @@ export default function App() {
         const all = tilesRef.current.map((t) => t.id);
         selectedRef.current = all;
         setSelectedIds(all);
+        clearConnSelection();
         return;
       }
       if (e.key !== "Delete") return;
       if (isEditableTarget(e)) return;
-      if (selectedRef.current.length === 0) return;
+      if (
+        selectedRef.current.length === 0 &&
+        selectedConnRef.current.length === 0
+      )
+        return;
       e.preventDefault();
       deleteSelected();
+      removeConns(selectedConnRef.current);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [deleteSelected]);
+  }, [deleteSelected, removeConns, clearConnSelection]);
 
   // ---- single read-aloud preview (one at a time, driven from tile menus) ----
   const [previewingId, setPreviewingId] = useState(null);
@@ -1154,7 +1527,7 @@ export default function App() {
         const text = (json?.text || "").trim();
         updateTile(tile.id, {
           transcript: text,
-          h: Math.max(tile.h || 0, 200),
+          h: transcriptTileHeight(text, tile.w || AUDIO_W),
         });
         showToast("Transcript ready");
       } catch (err) {
@@ -1394,6 +1767,18 @@ export default function App() {
     return () => clearTimeout(t);
   }, [tiles]);
 
+  // Connections are tiny — plain debounced save, no quota gymnastics.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(CONN_KEY, JSON.stringify(connections));
+      } catch (err) {
+        console.warn("Could not persist connections:", err);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [connections]);
+
   const stopRecording = useCallback(() => {
     const rec = recorderRef.current;
     stopTimer();
@@ -1412,6 +1797,39 @@ export default function App() {
     }
   }, [stopTimer]);
 
+  // Microphone stream cache: acquiring the device takes hundreds of ms,
+  // so keep it warm (first gesture) and re-warm after every take.
+  const micStreamRef = useRef(null);
+  const micPromiseRef = useRef(null);
+
+  const getMicStream = useCallback(() => {
+    const live = micStreamRef.current;
+    if (
+      live &&
+      live.active &&
+      live.getAudioTracks().some((t) => t.readyState === "live")
+    ) {
+      return Promise.resolve(live);
+    }
+    if (!micPromiseRef.current) {
+      micPromiseRef.current = navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          micStreamRef.current = stream;
+          stream.getAudioTracks().forEach((t) => {
+            t.onended = () => {
+              if (micStreamRef.current === stream) micStreamRef.current = null;
+            };
+          });
+          return stream;
+        })
+        .finally(() => {
+          micPromiseRef.current = null;
+        });
+    }
+    return micPromiseRef.current;
+  }, []);
+
   const startRecording = useCallback(async () => {
     if (recordingRef.current) return;
     setRecError(null);
@@ -1423,7 +1841,7 @@ export default function App() {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getMicStream();
       const rec = new MediaRecorder(stream);
       chunksRef.current = [];
       streamRef.current = stream;
@@ -1445,6 +1863,8 @@ export default function App() {
         });
         streamRef.current = null;
         recorderRef.current = null;
+        // Re-warm the mic in the background so the next take starts instantly.
+        void getMicStream().catch(() => {});
         if (chunks.length === 0) return;
         const blob = new Blob(chunks, {
           type: rec.mimeType || "audio/webm",
@@ -1493,15 +1913,56 @@ export default function App() {
           : "Could not start recording.",
       );
     }
-  }, [nextId, stopTimer, clientToContent, viewportCenterContent]);
+  }, [nextId, stopTimer, clientToContent, viewportCenterContent, getMicStream]);
 
   // Track the cursor so recordings can land where the pointer is.
+  // Also drives the welcome card's cursor-following glow.
   useEffect(() => {
     const onMove = (e) => {
       cursorRef.current = { x: e.clientX, y: e.clientY };
+      const card = cardRef.current;
+      const glow = cardGlowRef.current;
+      if (!card || !glow) return;
+      const r = card.getBoundingClientRect();
+      const inside =
+        e.clientX >= r.left &&
+        e.clientX <= r.right &&
+        e.clientY >= r.top &&
+        e.clientY <= r.bottom;
+      if (inside) {
+        glowTarget.current.x = e.clientX - r.left;
+        glowTarget.current.y = e.clientY - r.top;
+        if (!glow.classList.contains("on")) {
+          // Snap on entry so it never sweeps in from a stale spot.
+          glowCur.current.x = glowTarget.current.x;
+          glowCur.current.y = glowTarget.current.y;
+        }
+        glow.classList.add("on");
+      } else {
+        glow.classList.remove("on");
+      }
     };
     window.addEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  // Eased follower for the card glow: trails the pointer instead of snapping.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const glow = cardGlowRef.current;
+      if (!glow) return;
+      const t = glowTarget.current;
+      const c = glowCur.current;
+      c.x += (t.x - c.x) * 0.055;
+      c.y += (t.y - c.y) * 0.055;
+      if (Math.abs(t.x - c.x) < 0.1 && Math.abs(t.y - c.y) < 0.1) return;
+      glow.style.setProperty("--mx", `${c.x}px`);
+      glow.style.setProperty("--my", `${c.y}px`);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // Living ASCII wave background: a fixed full-viewport canvas of wave glyphs
@@ -1583,6 +2044,19 @@ export default function App() {
     };
   }, []);
 
+  // Warm the microphone on first interaction so recording starts instantly.
+  useEffect(() => {
+    const warm = () => {
+      void getMicStream().catch(() => {});
+    };
+    window.addEventListener("pointerdown", warm, { once: true });
+    window.addEventListener("keydown", warm, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", warm);
+      window.removeEventListener("keydown", warm);
+    };
+  }, [getMicStream]);
+
   // Global Space (hold) / R (toggle) shortcuts
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -1647,7 +2121,13 @@ export default function App() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
-      <TopPillHeader onSummarize={summarizeCanvas} summarizing={summarizing} />
+      <TopPillHeader
+        onSummarize={summarizeCanvas}
+        summarizing={summarizing}
+        tiles={tiles}
+        connections={connections}
+        onFocusConnection={focusConnection}
+      />
 
       {searchOpen && (
         <div className="absolute top-20 left-1/2 z-50 flex -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 bg-white/80 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85 dark:ring-white/10">
@@ -1699,7 +2179,47 @@ export default function App() {
         className="transform-wrapper-fill absolute inset-0"
         onDoubleClick={handleEmptyDoubleClick}
         onMouseDown={handleWrapperMouseDown}
-        onMouseDownCapture={blurActiveText}
+        onMouseDownCapture={(e) => {
+          // Complete pending connections from ANY tile press — textareas and
+          // controls stop bubbling, so the bubble path can't be trusted here.
+          // Capture runs top-down first and can't be blocked.
+          if (connecting) {
+            const el = e.target.closest?.(".tile");
+            const id = el?.dataset?.tileId;
+            if (id) {
+              e.stopPropagation();
+              e.preventDefault();
+              if (id !== connecting) {
+                createConnection(connecting, id);
+                const aname =
+                  tiles.find((t) => t.id === connecting)?.name || "Tile";
+                const bname = tiles.find((t) => t.id === id)?.name || "Tile";
+                showToast(`${aname} → ${bname} connected`);
+                selectOnly(id);
+              } else {
+                clearToast();
+              }
+              setConnecting(null);
+            }
+          }
+          blurActiveText(e);
+        }}
+        onClickCapture={(e) => {
+          // Fallback completion: if the mousedown phase was swallowed
+          // anywhere upstream, a genuine click still lands the connection.
+          // (When mousedown already completed, `connecting` is null here.)
+          if (!connecting) return;
+          const el = e.target.closest?.(".tile");
+          const id = el?.dataset?.tileId;
+          if (!id || id === connecting) return;
+          createConnection(connecting, id);
+          const aname =
+            tiles.find((t) => t.id === connecting)?.name || "Tile";
+          const bname = tiles.find((t) => t.id === id)?.name || "Tile";
+          showToast(`${aname} → ${bname} connected`);
+          selectOnly(id);
+          setConnecting(null);
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           if (e.target.closest?.(".tile-rnd")) return;
@@ -1726,7 +2246,7 @@ export default function App() {
           onTransform={handleTransform}
         >
           <TransformComponent
-            wrapperClass={`!w-full !h-full ${isShiftPressed ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
+            wrapperClass={`!w-full !h-full ${connecting ? "cursor-crosshair" : isShiftPressed ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
           >
             <CanvasSurface
               tiles={tiles}
@@ -1744,6 +2264,11 @@ export default function App() {
               onTileDragStop={handleTileDragStop}
               busyIds={busyIds}
               leavingIds={leavingIds}
+              connections={connections}
+              selectedConnIds={selectedConnIds}
+              leavingConnIds={leavingConnIds}
+              selectConnection={selectConnection}
+              openMenu={openMenu}
               onTileContextMenu={handleTileContextMenu}
             />
           </TransformComponent>
@@ -1754,15 +2279,20 @@ export default function App() {
         <div className="pointer-events-none absolute top-1/2 left-1/2 z-40 -translate-x-1/2 -translate-y-1/2 animate-fade-in">
           <div
             aria-hidden="true"
-            className="welcome-glow absolute -inset-3 rounded-[28px]"
+            className="welcome-glow absolute -inset-px rounded-[20px]"
           />
-          <div className="relative flex flex-col items-center gap-2 rounded-2xl border border-neutral-200/70 bg-white/60 px-6 py-4.5 text-center shadow-sm backdrop-blur-sm select-none dark:border-white/10 dark:bg-stone-900/60">
-          <p className="font-display text-base font-medium text-neutral-600 dark:text-stone-200">Welcome to <span className="font-bold">Atless</span>.</p>
-          <p className="max-w-[240px] text-sm leading-relaxed text-balance text-neutral-400 dark:text-stone-500">
-            more productivity, <span className="font-bold">less clutter</span>.
+          <div ref={cardRef} className="relative flex flex-col items-center gap-3 overflow-hidden rounded-2xl border border-neutral-200/70 bg-white/60 px-14 py-12 text-center shadow-sm backdrop-blur-sm select-none dark:border-white/10 dark:bg-stone-900/60">
+          <div
+            ref={cardGlowRef}
+            aria-hidden="true"
+            className="card-cursor-glow pointer-events-none absolute inset-0 text-blue-500 dark:text-amber-500"
+          />
+          <p className="font-display text-5xl font-medium text-neutral-600 dark:text-stone-200">Welcome to <span className="font-bold">Atless</span>.</p>
+          <p className="max-w-[440px] text-xl leading-relaxed text-balance text-neutral-400 dark:text-stone-500">
+            more productivity, <span className="font-bold">less clutter.</span>
           </p>
-          <p className="text-sm text-neutral-400 dark:text-stone-500">
-            double-click anywhere to begin.
+          <p className="text-base text-neutral-400 dark:text-stone-500">
+            double-click anywhere to begin
           </p>
           </div>
         </div>
@@ -1776,6 +2306,39 @@ export default function App() {
 
       {menu &&
         (() => {
+          const cc = connections.find((x) => x.id === menu.id);
+          if (cc) {
+            return (
+              <div
+                role="menu"
+                aria-label="Connection actions"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                className={`tile-menu fixed z-[60] w-48 rounded-2xl border border-white/60 bg-white/85 p-1.5 shadow-xl ring-1 ring-black/5 backdrop-blur-xl transition-all duration-150 origin-top-left dark:border-white/10 dark:bg-stone-900/90 dark:ring-white/10 ${
+                  menuShown ? "scale-100 opacity-100" : "pointer-events-none scale-[0.97] opacity-0"
+                }`}
+                style={{
+                  left: Math.max(8, Math.min(menu.x, window.innerWidth - 200)),
+                  top: Math.max(8, Math.min(menu.y, window.innerHeight - 80)),
+                }}
+              >
+                <button
+                  onClick={() => {
+                    closeMenu();
+                    removeConns([cc.id]);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-red-500 transition outline-none hover:bg-red-500/10 dark:text-red-400"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 dark:bg-white/10 dark:text-stone-400">
+                    <Trash2 size={13} />
+                  </span>
+                  Delete
+                </button>
+              </div>
+            );
+          }
           const t = tiles.find((x) => x.id === menu.id);
           if (!t) return null;
           return (
@@ -1813,6 +2376,11 @@ export default function App() {
                 } else {
                   deleteTile(id);
                 }
+              }}
+              onConnect={() => {
+                closeMenu();
+                setConnecting(t.id);
+                showToast("Click another tile to connect — Esc to cancel", 30000);
               }}
               shown={menuShown}
             />

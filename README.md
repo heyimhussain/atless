@@ -17,7 +17,7 @@ on a pannable, zoomable board that persists across visits.
 | YouTube | Drag in any watch / share / Shorts / live link for a playable embed |
 | Voice notes | Hold `Space` or toggle `R` to record; custom player, ElevenLabs transcription, download |
 | AI summaries | One-click Gemini synthesis of notes, transcripts, images (multimodal), and video links |
-| Organization | Click / Ctrl+click / box-select / Ctrl+A, move groups together, tile z-ordering |
+| Organization | Click / Ctrl+click / box-select / Ctrl+A, move groups together, tile z-ordering, curved connection arrows |
 | Search | `Ctrl+F` finds titles and note text, then flies the camera to the match |
 | Persistence | Tiles auto-save to localStorage (with quota-safe degradation) |
 | Theming | Light + dark mode with persisted preference |
@@ -37,6 +37,7 @@ on a pannable, zoomable board that persists across visits.
 | Hold Space, or press R | Record / stop voice note |
 | Right-click tile | Context menu (read aloud, transcribe, download, explain) |
 | Ctrl + F | Search tiles |
+| Right-click → Make connection | Link two tiles with a curved arrow (Esc cancels) |
 | `?` | Shortcut guide |
 
 ## Getting started

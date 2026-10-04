@@ -53,6 +53,7 @@ export default function MediaTile({ tile, scale, selected, leaving, onChange, on
       <div
         className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white transition-all duration-150 active:scale-[0.985] dark:bg-stone-900 ${leaving ? "animate-tile-out" : "animate-tile-in"} ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
         onMouseDown={(e) => onTileMouseDown(tile.id, e)}
+        data-tile-id={tile.id}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
