@@ -18,8 +18,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      # NOTE: Node 18 cannot build this project — Vite 8 requires Node 20.19+
+      # (rolldown imports `node:util/styleText`, unavailable on Node 18).
       matrix:
-        node-version: [18, 20]
+        node-version: [20, 22]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
