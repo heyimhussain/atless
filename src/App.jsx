@@ -371,6 +371,7 @@ function CanvasSurface({
   leavingConnIds,
   selectConnection,
   openMenu,
+  connecting,
 }) {
   const ctx = useTransformContext();
   const controls = useControls();
@@ -508,6 +509,7 @@ function CanvasSurface({
           busy: busyIds.includes(tile.id),
           leaving: leavingIds.includes(tile.id),
           onTileContextMenu,
+          connecting,
         };
         if (tile.type === "text") {
           return <TextNote key={tile.id} {...common} />;
@@ -656,7 +658,8 @@ export default function App() {
     return tiles.filter(
       (t) =>
         (t.name || "").toLowerCase().includes(q) ||
-        (t.text || "").toLowerCase().includes(q),
+        (t.text || "").toLowerCase().includes(q) ||
+        (t.transcript || "").toLowerCase().includes(q),
     );
   }, [tiles, query]);
 
@@ -2528,6 +2531,7 @@ export default function App() {
               selectConnection={selectConnection}
               openMenu={openMenu}
               onTileContextMenu={handleTileContextMenu}
+              connecting={connecting}
             />
           </TransformComponent>
         </TransformWrapper>

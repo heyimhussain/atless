@@ -37,7 +37,7 @@ const HELP_ITEMS = [
   { icon: MousePointerClick, combos: [["Ctrl", "Click"]], desc: "Multi-select tiles / links" },
   { icon: Layers, combos: [["Ctrl", "A"]], desc: "Select all tiles" },
   { icon: Trash2, combos: [["Del"]], desc: "Delete selected" },
-  { icon: Search, combos: [["Ctrl", "F"]], desc: "Search tiles" },
+  { icon: Search, combos: [["Ctrl", "F"]], desc: "Search titles, notes, transcripts" },
   { icon: Pencil, combos: [["Double-click", "Title"]], desc: "Rename tile" },
   { icon: Spline, combos: [["Right-click"], ["Connect"]], desc: "Link tiles with an arrow" },
   { icon: X, combos: [["Esc"]], desc: "Cancel connection / close menus" },

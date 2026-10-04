@@ -35,7 +35,7 @@ on a pannable, zoomable board that persists across visits.
 | Delete | Delete selected tiles / connections |
 | Hold Space, or press R | Record / stop voice note |
 | Right-click tile | Context menu (read aloud, transcribe, download, explain) |
-| Ctrl + F | Search tiles |
+| Ctrl + F | Search titles, notes, transcripts |
 | Right-click → Make connection | Link two tiles with a curved arrow |
 | Esc | Cancel connection / close menus |
 | Chain-icon button | Copy a shareable link to this canvas |

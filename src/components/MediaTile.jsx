@@ -8,7 +8,7 @@ import TileName, { NameHint } from "./TileName.jsx";
 // (see lockAspectRatioExtraHeight below) and adding it to probed tile sizes.
 export const MEDIA_HEADER_H = 28;
 
-export default function MediaTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu }) {
+export default function MediaTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, connecting }) {
   const isVideo = tile.type === "video";
   const isYouTube = tile.type === "youtube";
   const [renaming, setRenaming] = useState(false);
@@ -50,7 +50,7 @@ export default function MediaTile({ tile, scale, selected, leaving, onChange, on
       style={{ zIndex: tile.type === "image" ? 10 : 20 }}
     >
       <div
-        className={`tile flex h-full w-full flex-col overflow-hidden rounded-xl bg-white transition-all duration-150 active:scale-[0.985] dark:bg-stone-900 ${leaving ? "animate-tile-out" : "animate-tile-in"} ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
+        className={`tile relative flex h-full w-full flex-col overflow-hidden rounded-xl bg-white transition-all duration-150 active:scale-[0.985] dark:bg-stone-900 ${leaving ? "animate-tile-out" : "animate-tile-in"} ${selected ? "shadow-[0_0_0_2px_rgba(59,130,246,0.8),0_8px_24px_rgba(59,130,246,0.35)] dark:shadow-[0_0_0_2px_rgba(250,160,22,0.8),0_8px_24px_rgba(250,160,22,0.35)]" : "shadow-[0_4px_20px_rgb(0,0,0,0.06)]"}`}
         onMouseDown={(e) => onTileMouseDown(tile.id, e)}
         data-tile-id={tile.id}
         onContextMenu={(e) => {
@@ -131,6 +131,13 @@ export default function MediaTile({ tile, scale, selected, leaving, onChange, on
             </div>
           )}
         </div>
+        {/* Cross-origin iframes swallow all mouse events, so while a
+            connection is pending this catcher lets a press anywhere on the
+            tile complete it. Only rendered while connecting — normal video
+            playback is untouched. Events bubble to the tile handlers. */}
+        {isYouTube && connecting && (
+          <div aria-hidden="true" className="absolute inset-0 z-10 cursor-crosshair" />
+        )}
       </div>
     </Rnd>
   );
