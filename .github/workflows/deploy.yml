@@ -15,34 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      # NOTE: Node 18 cannot build this project — Vite 8 requires Node 20.19+
-      # (rolldown imports `node:util/styleText`, unavailable on Node 18).
-      matrix:
-        node-version: [20, 22]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-        env:
-          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
-          VITE_ELEVENLABS_API_KEY: ${{ secrets.VITE_ELEVENLABS_API_KEY }}
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -59,6 +32,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check API secrets present
+        run: |
+          if [ -z "${{ secrets.VITE_GEMINI_API_KEY }}" ]; then
+            echo "::error::VITE_GEMINI_API_KEY secret is empty — add it under Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          if [ -z "${{ secrets.VITE_ELEVENLABS_API_KEY }}" ]; then
+            echo "::error::VITE_ELEVENLABS_API_KEY secret is empty — add it under Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "Both API secrets are set."
 
       - name: Build
         run: npm run build
