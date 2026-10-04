@@ -1,4 +1,4 @@
-# <img src="public/favicon.svg" alt="Atless logo" width="28" height="28"> Atless — more productivity, less clutter.
+# <img src="public/favicon.svg" alt="Atless logo" width="36" height="36"> Atless — more productivity, less clutter.
 
 Atless is an infinite spatial canvas for collecting what's on your mind:
 typed notes, images, videos, YouTube embeds, voice recordings with
