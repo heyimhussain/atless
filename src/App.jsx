@@ -207,7 +207,7 @@ function connectionControls(a, b) {
 }
 
 // Gap between opposite-direction curves (A→B and B→A render side by side).
-const PAIR_GAP = 6;
+const PAIR_GAP = 10;
 
 // Lateral shift for one side of a bidirectional pair: each direction offsets
 // to its own side of the centerline so the pair reads as two parallel lines.
