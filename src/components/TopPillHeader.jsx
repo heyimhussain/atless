@@ -297,6 +297,7 @@ export default function TopPillHeader({ onSummarize, summarizing, tiles = [], co
           <div className="mt-1 flex items-center justify-center gap-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
             <span>© 2026 Hussain Shah Hashmi - Made with</span>
             <Heart size={11} fill="currentColor" className="shrink-0" />
+            <span>for StormHacks 2026</span>
           </div>
         </div>
       )}
