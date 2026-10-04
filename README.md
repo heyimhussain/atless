@@ -167,3 +167,5 @@ Use relative asset paths or set Vite's `base` accordingly.
 | Share failed (HTTP 405) | The secret holds a markdown link (`[url](url)`) instead of the bare Worker URL — fix the secret, push to rebuild |
 | Shared link won't load | Stale Worker — redeploy with `npx wrangler deploy` from `server/` |
 | Share too large | Canvas exceeds ~15MB inline — drop some media until object-storage uploads land |
+
+`git commit -m "added easter egg - hint 'S_o_mHack_'"`
