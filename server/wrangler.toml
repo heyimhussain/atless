@@ -1,0 +1,11 @@
+name = "atless-share-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Production: Hyperdrive holds the Tiger Data connection string (SSL required).
+# Create it with `wrangler hyperdrive create atless-db --connection-string="postgres://..."`,
+# then paste the returned id below. Local dev can use server/.dev.vars instead
+# (DATABASE_URL=..., git-ignored) — see server/README.md.
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "REPLACE_WITH_HYPERDRIVE_ID"

@@ -15,6 +15,7 @@ dist-ssr
 # Environment variables (API keys — never commit)
 .env
 .env.local
+server/.dev.vars
 
 # Editor directories and files
 .vscode/*

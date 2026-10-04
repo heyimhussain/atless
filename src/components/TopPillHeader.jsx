@@ -86,7 +86,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader({ onSummarize, summarizing, tiles = [], connections = [], onFocusConnection }) {
+export default function TopPillHeader({ onSummarize, summarizing, onShare, sharing, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [dark, setDark] = useState(
@@ -262,6 +262,20 @@ export default function TopPillHeader({ onSummarize, summarizing, tiles = [], co
             <Loader2 size={15} className="animate-spin" />
           ) : (
             <Sparkles size={15} />
+          )}
+        </button>
+
+        <button
+          onClick={onShare}
+          disabled={sharing}
+          aria-label="Generate link"
+          title="Generate link"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 outline-none transition-all hover:bg-stone-900 hover:text-white active:scale-90 disabled:opacity-60 sm:h-8 sm:w-8 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
+        >
+          {sharing ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <Link2 size={15} />
           )}
         </button>
 

@@ -870,6 +870,192 @@ export default function App() {
     }
   }, [summarizing, showToast, clientToContent, nextId]);
 
+  // ---- shareable canvas links (Worker + Tiger Data, editable copy) ----
+  const [sharing, setSharing] = useState(false);
+
+  const shareCanvas = useCallback(async () => {
+    if (sharing) return;
+    const api = import.meta.env.VITE_SHARE_API_URL;
+    if (!api) {
+      showToast("Share API not configured — add VITE_SHARE_API_URL", 4000);
+      return;
+    }
+    const live = tilesRef.current;
+    if (live.length === 0) {
+      showToast("Add some tiles first to share!");
+      return;
+    }
+    // blob: URLs die with the tab — strip them so shared media never 404s.
+    const cleanTiles = live.map((t) => ({
+      ...t,
+      src:
+        typeof t.src === "string" && !t.src.startsWith("blob:")
+          ? t.src
+          : undefined,
+    }));
+    const ids = new Set(cleanTiles.map((t) => t.id));
+    const cleanConns = connections.filter(
+      (c) => ids.has(c.from) && ids.has(c.to),
+    );
+    const payload = JSON.stringify({
+      version: 1,
+      tiles: cleanTiles,
+      connections: cleanConns,
+    });
+    if (payload.length > 15_000_000) {
+      showToast(
+        "Canvas too large to share — remove some media (uploads coming soon)",
+        5000,
+      );
+      return;
+    }
+    setSharing(true);
+    try {
+      const res = await fetch(`${String(api).replace(/\/$/, "")}/api/shares`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          if (j?.error) detail = j.error;
+        } catch {
+          /* keep status */
+        }
+        throw new Error(detail);
+      }
+      const { id } = await res.json();
+      const link = `${window.location.origin}${window.location.pathname}#/s/${id}`;
+      try {
+        await navigator.clipboard.writeText(link);
+        showToast("Share link copied to clipboard");
+      } catch {
+        showToast(`Copy this link: ${link}`, 8000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Share failed (${msg || "network error"})`, 4000);
+    } finally {
+      setSharing(false);
+    }
+  }, [sharing, showToast, connections]);
+
+  // Opening a share link (#/s/<id>) loads that exact canvas as an editable
+  // local copy, then drops the hash so refresh falls back to autosave.
+  useEffect(() => {
+    const m = window.location.hash.match(/^#\/s\/([A-Za-z0-9_-]{8,32})/);
+    if (!m) return;
+    const api = import.meta.env.VITE_SHARE_API_URL;
+    if (!api) {
+      showToast("Share API not configured — cannot load this link", 4000);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(
+          `${String(api).replace(/\/$/, "")}/api/shares/${m[1]}`,
+        );
+        if (!res.ok)
+          throw new Error(
+            res.status === 404 ? "link not found" : `HTTP ${res.status}`,
+          );
+        const data = await res.json();
+        if (
+          !data ||
+          !Array.isArray(data.tiles) ||
+          !Array.isArray(data.connections)
+        )
+          throw new Error("bad payload");
+        const types = new Set([
+          "text",
+          "image",
+          "video",
+          "audio",
+          "youtube",
+          "summary",
+        ]);
+        const loaded = [];
+        for (const t of data.tiles) {
+          if (!t || typeof t.id !== "string" || !types.has(t.type)) continue;
+          const w =
+            Number.isFinite(+t.w) && +t.w > 0 ? +t.w : NOTE_W;
+          const transcript =
+            typeof t.transcript === "string" ? t.transcript : "";
+          loaded.push({
+            id: t.id,
+            type: t.type,
+            x: Number.isFinite(+t.x) ? +t.x : 0,
+            y: Number.isFinite(+t.y) ? +t.y : 0,
+            w,
+            h:
+              t.type === "audio"
+                ? transcript
+                  ? transcriptTileHeight(transcript, w)
+                  : AUDIO_H
+                : Number.isFinite(+t.h) && +t.h > 0
+                  ? +t.h
+                  : 160,
+            text: typeof t.text === "string" ? t.text : "",
+            transcript,
+            src:
+              typeof t.src === "string" && !t.src.startsWith("blob:")
+                ? t.src
+                : undefined,
+            name: typeof t.name === "string" ? t.name : "",
+            ratio:
+              Number.isFinite(+t.ratio) && +t.ratio > 0
+                ? +t.ratio
+                : undefined,
+          });
+        }
+        if (loaded.length === 0) throw new Error("empty canvas");
+        const liveIds = new Set(loaded.map((t) => t.id));
+        const seen = new Set();
+        const conns = [];
+        for (const c of data.connections) {
+          if (
+            !c ||
+            typeof c.from !== "string" ||
+            typeof c.to !== "string" ||
+            c.from === c.to ||
+            !liveIds.has(c.from) ||
+            !liveIds.has(c.to)
+          )
+            continue;
+          const k = `${c.from}→${c.to}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          conns.push({
+            id: typeof c.id === "string" ? c.id : `conn-${c.from}-${c.to}`,
+            from: c.from,
+            to: c.to,
+          });
+        }
+        setTiles(loaded);
+        setConnections(conns);
+        selectedRef.current = [];
+        setSelectedIds([]);
+        clearConnSelection();
+        showToast("Shared canvas loaded — editable copy saved locally");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showToast(`Could not load shared canvas (${msg})`, 4000);
+      } finally {
+        try {
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+        } catch {
+          /* noop */
+        }
+      }
+    })();
+  }, []);
+
   // ---- tile connections: pick a source from its menu, then click a target ----
   const [connecting, setConnecting] = useState(null); // source tile id
 
@@ -2124,6 +2310,8 @@ export default function App() {
       <TopPillHeader
         onSummarize={summarizeCanvas}
         summarizing={summarizing}
+        onShare={shareCanvas}
+        sharing={sharing}
         tiles={tiles}
         connections={connections}
         onFocusConnection={focusConnection}
