@@ -105,6 +105,19 @@ body {
   animation: fade-in 0.15s ease-out;
 }
 
+/* New connection arrows fade in on creation (deletions use the leaving fade) */
+@keyframes conn-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-conn-in {
+  animation: conn-in 0.22s ease-out;
+}
+
 /* Easter-egg otter: pops in once, then bobs gently forever */
 @keyframes otter-bob {
   0%,
