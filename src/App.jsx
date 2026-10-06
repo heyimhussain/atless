@@ -222,17 +222,80 @@ function connectionLateral(a, b, paired) {
 }
 
 // Slide an edge anchor along its edge (never off it) so arrowheads stay
-// glued to tiles while the pair separates.
-function slideAlongEdge(r, p, s) {
-  if (p.x === r.x || p.x === r.x + r.w) return { x: p.x, y: p.y + s.y };
-  return { x: p.x + s.x, y: p.y };
+// glued to tiles. Lateral pair separation bends the controls instead, so the
+// two mechanisms can never cancel each other out.
+function slideAlongEdge(r, p, extra = 0) {
+  if (p.x === r.x || p.x === r.x + r.w) return { x: p.x, y: p.y + extra };
+  return { x: p.x + extra, y: p.y };
 }
 
-function connectionPathShifted(a, b, shift) {
+function connectionPathShifted(a, b, shift, offA = 0, offB = 0) {
   const { p0, p1, c1, c2 } = connectionControls(a, b);
-  const q0 = slideAlongEdge(a, p0, shift);
-  const q1 = slideAlongEdge(b, p1, shift);
+  const q0 = slideAlongEdge(a, p0, offA);
+  const q1 = slideAlongEdge(b, p1, offB);
   return `M${q0.x},${q0.y} C${c1.x + shift.x},${c1.y + shift.y} ${c2.x + shift.x},${c2.y + shift.y} ${q1.x},${q1.y}`;
+}
+
+function edgeKey(r, p) {
+  if (p.x === r.x) return "L";
+  if (p.x === r.x + r.w) return "R";
+  if (p.y === r.y) return "T";
+  return "B";
+}
+
+// One shared precompute per render: lateral pair shifts (applied to curve
+// controls) plus same-edge endpoint spreading (applied to anchors), so
+// arrowheads never stack and pairs never collapse. Group members sort by
+// lateral side first, so paired lines land on the same side as their bend
+// instead of cancelling it; the rest fill by id. Returns
+// { offsets: Map "connId→tileId" => px, laterals: Map connId => {x, y} }.
+function computeConnGeometry(connections, tileById) {
+  const pairKeys = new Set(connections.map((c) => `${c.from}→${c.to}`));
+  const laterals = new Map();
+  const live = [];
+  for (const c of connections) {
+    const a = tileById.get(c.from);
+    const b = tileById.get(c.to);
+    if (!a || !b) continue;
+    laterals.set(c.id, connectionLateral(a, b, pairKeys.has(`${c.to}→${c.from}`)));
+    live.push({ c, a, b });
+  }
+  const groups = new Map();
+  for (const { c, a, b } of live) {
+    const lat = laterals.get(c.id);
+    const ends = [
+      [a, edgeAnchor(a, b.x + b.w / 2, b.y + b.h / 2)],
+      [b, edgeAnchor(b, a.x + a.w / 2, a.y + a.h / 2)],
+    ];
+    for (const [t, p] of ends) {
+      const edge = edgeKey(t, p);
+      const key = `${t.id}|${edge}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({
+        key: `${c.id}→${t.id}`,
+        id: c.id,
+        // Lateral projection onto this edge's tangent (0 when unpaired).
+        proj: edge === "L" || edge === "R" ? lat.y : lat.x,
+        vertical: edge === "L" || edge === "R",
+      });
+    }
+  }
+  const EDGE_PAD = 10;
+  const offsets = new Map();
+  for (const members of groups.values()) {
+    members.sort((m1, m2) => m1.proj - m2.proj || (m1.key < m2.key ? -1 : 1));
+    const n = members.length;
+    if (n < 2) {
+      offsets.set(members[0].key, 0);
+      continue;
+    }
+    const t = tileById.get(members[0].key.slice(members[0].key.indexOf("→") + 1));
+    const len = members[0].vertical ? t.h : t.w;
+    const avail = Math.max(0, len - EDGE_PAD * 2);
+    const spacing = Math.min(PAIR_GAP, avail / (n - 1));
+    members.forEach((m, i) => offsets.set(m.key, (i - (n - 1) / 2) * spacing));
+  }
+  return { offsets, laterals };
 }
 
 function connectionPath(a, b) {
@@ -242,11 +305,11 @@ function connectionPath(a, b) {
 // Does a connection's curve pass through rect r? Samples the cubic so a
 // marquee boxing just the line (no endpoints) still selects it. Takes the
 // same lateral shift the renderer uses so paired lines test true geometry.
-function connectionHitsRect(a, b, r, shift) {
+function connectionHitsRect(a, b, r, shift, offA = 0, offB = 0) {
   const s = shift || { x: 0, y: 0 };
   const { p0, p1, c1, c2 } = connectionControls(a, b);
-  const q0 = slideAlongEdge(a, p0, s);
-  const q1 = slideAlongEdge(b, p1, s);
+  const q0 = slideAlongEdge(a, p0, offA);
+  const q1 = slideAlongEdge(b, p1, offB);
   const k1 = { x: c1.x + s.x, y: c1.y + s.y };
   const k2 = { x: c2.x + s.x, y: c2.y + s.y };
   const N = 32;
@@ -418,8 +481,8 @@ function CanvasSurface({
   }, [ctx, controls, viewRef, instanceRef, controlsRef]);
 
   const tileById = new Map(tiles.map((t) => [t.id, t]));
-  // Directed pairs (A→B plus B→A) render as two offset parallel lines.
-  const connPairKeys = new Set(connections.map((c) => `${c.from}→${c.to}`));
+  // Pair laterals + crowded-edge endpoint spreading (one shared precompute).
+  const connGeo = computeConnGeometry(connections, tileById);
 
   // Real bounding box around all tiles so the arrow layer has true
   // dimensions instead of relying on zero-size overflow painting.
@@ -488,10 +551,13 @@ function CanvasSurface({
           const a = tileById.get(c.from);
           const b = tileById.get(c.to);
           if (!a || !b) return null;
+          const geoShift = connGeo.laterals.get(c.id) || { x: 0, y: 0 };
           const d = connectionPathShifted(
             a,
             b,
-            connectionLateral(a, b, connPairKeys.has(`${c.to}→${c.from}`)),
+            geoShift,
+            connGeo.offsets.get(`${c.id}→${c.from}`) ?? 0,
+            connGeo.offsets.get(`${c.id}→${c.to}`) ?? 0,
           );
           const sel = selectedConnIds.includes(c.id);
           const leaving = leavingConnIds.includes(c.id);
@@ -1477,21 +1543,21 @@ export default function App() {
       const hitSet = new Set(hit);
       const byId = new Map(tilesRef.current.map((t) => [t.id, t]));
       const box = { x1: rx1, y1: ry1, x2: rx2, y2: ry2 };
-      const pairKeys = new Set(
-        connListRef.current.map((c) => `${c.from}→${c.to}`),
-      );
+      const geo = computeConnGeometry(connListRef.current, byId);
       const hitConns = connListRef.current
         .filter((c) => {
           if (hitSet.has(c.from) && hitSet.has(c.to)) return true;
           const a = byId.get(c.from);
           const b = byId.get(c.to);
           if (!a || !b) return false;
-          const shift = connectionLateral(
+          return connectionHitsRect(
             a,
             b,
-            pairKeys.has(`${c.to}→${c.from}`),
+            box,
+            geo.laterals.get(c.id) || { x: 0, y: 0 },
+            geo.offsets.get(`${c.id}→${c.from}`) ?? 0,
+            geo.offsets.get(`${c.id}→${c.to}`) ?? 0,
           );
-          return connectionHitsRect(a, b, box, shift);
         })
         .map((c) => c.id);
       const nextConns = m.ctrl
