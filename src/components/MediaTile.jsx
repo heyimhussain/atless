@@ -8,7 +8,7 @@ import TileName, { NameHint } from "./TileName.jsx";
 // (see lockAspectRatioExtraHeight below) and adding it to probed tile sizes.
 export const MEDIA_HEADER_H = 28;
 
-export default function MediaTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, connecting }) {
+export default function MediaTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileResize, onTileContextMenu, connecting }) {
   const isVideo = tile.type === "video";
   const isYouTube = tile.type === "youtube";
   const [renaming, setRenaming] = useState(false);
@@ -36,6 +36,9 @@ export default function MediaTile({ tile, scale, selected, leaving, onChange, on
       onDrag={(e, data) => onTileDrag(tile.id, e, data)}
       onDragStop={(e, d) => onTileDragStop(tile.id, e, d)}
       onResizeStart={() => onDraggingTile?.(true)}
+      onResize={(e, dir, ref, delta, pos) => {
+        onTileResize(tile.id, ref.offsetWidth, ref.offsetHeight, pos.x, pos.y);
+      }}
       onResizeStop={(e, dir, ref, delta, pos) => {
         onDraggingTile?.(false);
         e.stopPropagation?.();

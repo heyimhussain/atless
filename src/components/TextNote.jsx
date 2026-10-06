@@ -5,7 +5,7 @@ import TileName, { NameHint } from "./TileName.jsx";
 import { textTileFirstWord } from "../lib/tileName.js";
 import { highlightParts } from "../lib/highlight.jsx";
 
-export default function TextNote({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, highlight }) {
+export default function TextNote({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileResize, onTileContextMenu, highlight }) {
   const [renaming, setRenaming] = useState(false);
   const fallbackName = textTileFirstWord(tile);
   // Search highlighting inside a textarea needs a mirrored backdrop layer
@@ -51,6 +51,9 @@ export default function TextNote({ tile, scale, selected, leaving, onChange, onD
       onDrag={(e, data) => onTileDrag(tile.id, e, data)}
       onDragStop={(e, d) => onTileDragStop(tile.id, e, d)}
       onResizeStart={() => onDraggingTile?.(true)}
+      onResize={(e, dir, ref, delta, pos) => {
+        onTileResize(tile.id, ref.offsetWidth, ref.offsetHeight, pos.x, pos.y);
+      }}
       onResizeStop={(e, dir, ref, delta, pos) => {
         onDraggingTile?.(false);
         e.stopPropagation?.();

@@ -11,7 +11,7 @@ function fmt(s) {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function AudioTile({ tile, scale, selected, busy, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileContextMenu, highlight }) {
+export default function AudioTile({ tile, scale, selected, busy, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileResize, onTileContextMenu, highlight }) {
   const audioRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -104,6 +104,9 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
       onDrag={(e, data) => onTileDrag(tile.id, e, data)}
       onDragStop={(e, d) => onTileDragStop(tile.id, e, d)}
       onResizeStart={() => onDraggingTile?.(true)}
+      onResize={(e, dir, ref, delta, pos) => {
+        onTileResize(tile.id, ref.offsetWidth, ref.offsetHeight, pos.x, pos.y);
+      }}
       onResizeStop={(e, dir, ref, delta, pos) => {
         onDraggingTile?.(false);
         e.stopPropagation?.();

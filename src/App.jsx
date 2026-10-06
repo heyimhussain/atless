@@ -491,6 +491,7 @@ function CanvasSurface({
   onTileDragStart,
   onTileDrag,
   onTileDragStop,
+  onTileResize,
   busyIds,
   onTileContextMenu,
   leavingIds,
@@ -644,6 +645,7 @@ function CanvasSurface({
           onTileDragStart,
           onTileDrag,
           onTileDragStop,
+          onTileResize,
           busy: busyIds.includes(tile.id),
           leaving: leavingIds.includes(tile.id),
           onTileContextMenu,
@@ -1475,6 +1477,14 @@ export default function App() {
           ? { ...t, x: snap.atStart[t.id].x + dx, y: snap.atStart[t.id].y + dy }
           : t,
       ),
+    );
+  }, []);
+
+  // Live-resize: stream Rnd's in-progress size into state so connected
+  // arrows track the tile in realtime (same controlled pattern as dragging).
+  const handleTileResize = useCallback((id, w, h, x, y) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, w, h, x, y } : t)),
     );
   }, []);
 
@@ -2672,6 +2682,7 @@ export default function App() {
               onTileDragStart={handleTileDragStart}
               onTileDrag={handleTileDrag}
               onTileDragStop={handleTileDragStop}
+              onTileResize={handleTileResize}
               busyIds={busyIds}
               leavingIds={leavingIds}
               connections={connections}
