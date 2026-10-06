@@ -2763,8 +2763,17 @@ export default function App() {
               >
                 <button
                   onClick={() => {
+                    const id = cc.id;
                     closeMenu();
-                    removeConns([cc.id]);
+                    // Deleting from a multi-selection removes the whole group.
+                    if (
+                      selectedConnRef.current.includes(id) &&
+                      selectedConnRef.current.length > 1
+                    ) {
+                      removeConns(selectedConnRef.current);
+                    } else {
+                      removeConns([id]);
+                    }
                   }}
                   className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-red-500 transition outline-none hover:bg-red-500/10 dark:text-red-400"
                 >
