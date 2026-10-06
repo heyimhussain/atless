@@ -244,10 +244,11 @@ function edgeKey(r, p) {
 }
 
 // One shared precompute per render: lateral pair shifts (applied to curve
-// controls) plus same-edge endpoint spreading (applied to anchors), so
-// arrowheads never stack and pairs never collapse. Group members sort by
-// lateral side first, so paired lines land on the same side as their bend
-// instead of cancelling it; the rest fill by id. Returns
+// controls) plus direction-grouped endpoint anchors (applied to edge points).
+// Each tile edge holds at most two points — one shared by all outbound links,
+// one shared by all inbound links, PAIR_GAP apart — so arrowheads never stack.
+// The outbound side follows any paired member's bend so pairs stay parallel
+// instead of S-bending. Returns
 // { offsets: Map "connId→tileId" => px, laterals: Map connId => {x, y} }.
 function computeConnGeometry(connections, tileById) {
   const pairKeys = new Set(connections.map((c) => `${c.from}→${c.to}`));
@@ -264,36 +265,66 @@ function computeConnGeometry(connections, tileById) {
   for (const { c, a, b } of live) {
     const lat = laterals.get(c.id);
     const ends = [
-      [a, edgeAnchor(a, b.x + b.w / 2, b.y + b.h / 2)],
-      [b, edgeAnchor(b, a.x + a.w / 2, a.y + a.h / 2)],
+      [a, edgeAnchor(a, b.x + b.w / 2, b.y + b.h / 2), "out"],
+      [b, edgeAnchor(b, a.x + a.w / 2, a.y + a.h / 2), "in"],
     ];
-    for (const [t, p] of ends) {
+    for (const [t, p, dir] of ends) {
       const edge = edgeKey(t, p);
-      const key = `${t.id}|${edge}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({
+      const key = `${t.id}|${edge}|${dir}`;
+      if (!groups.has(key))
+        groups.set(key, {
+          tile: t,
+          vertical: edge === "L" || edge === "R",
+          members: [],
+        });
+      const g = groups.get(key);
+      g.members.push({
         key: `${c.id}→${t.id}`,
-        id: c.id,
-        // Lateral projection onto this edge's tangent (0 when unpaired).
-        proj: edge === "L" || edge === "R" ? lat.y : lat.x,
-        vertical: edge === "L" || edge === "R",
+        // Lateral projection onto this edge's tangent (0 when unpaired),
+        // in outbound frame so pair members always agree.
+        proj: (edge === "L" || edge === "R" ? lat.y : lat.x) * (dir === "out" ? 1 : -1),
       });
     }
   }
-  const EDGE_PAD = 10;
+  const edges = new Map();
+  for (const [key, g] of groups) {
+    const cut = key.lastIndexOf("|");
+    const base = key.slice(0, cut);
+    const dir = key.slice(cut + 1);
+    if (!edges.has(base)) edges.set(base, {});
+    edges.get(base)[dir] = g;
+  }
   const offsets = new Map();
-  for (const members of groups.values()) {
-    members.sort((m1, m2) => m1.proj - m2.proj || (m1.key < m2.key ? -1 : 1));
-    const n = members.length;
-    if (n < 2) {
-      offsets.set(members[0].key, 0);
-      continue;
+  for (const sides of edges.values()) {
+    const out = sides.out;
+    const inn = sides.in;
+    if (out && inn) {
+      // Reference side from any paired member; default keeps out at +.
+      let ref = 0;
+      for (const m of out.members) {
+        if (m.proj !== 0) {
+          ref = m.proj;
+          break;
+        }
+      }
+      if (ref === 0) {
+        for (const m of inn.members) {
+          if (m.proj !== 0) {
+            ref = m.proj;
+            break;
+          }
+        }
+      }
+      const side = ref >= 0 ? 1 : -1;
+      const t = out.tile;
+      const len = out.vertical ? t.h : t.w;
+      const half = (PAIR_GAP / 2) * Math.min(1, Math.max(0, len - 8) / PAIR_GAP);
+      for (const m of out.members) offsets.set(m.key, side * half);
+      for (const m of inn.members) offsets.set(m.key, -side * half);
+    } else {
+      const g = out || inn;
+      for (const m of g.members) offsets.set(m.key, 0);
     }
-    const t = tileById.get(members[0].key.slice(members[0].key.indexOf("→") + 1));
-    const len = members[0].vertical ? t.h : t.w;
-    const avail = Math.max(0, len - EDGE_PAD * 2);
-    const spacing = Math.min(PAIR_GAP, avail / (n - 1));
-    members.forEach((m, i) => offsets.set(m.key, (i - (n - 1) / 2) * spacing));
   }
   return { offsets, laterals };
 }
