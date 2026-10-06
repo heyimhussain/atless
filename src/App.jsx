@@ -247,28 +247,6 @@ function connectionPathShifted(a, b, shift, offA = 0, offB = 0) {
   return pointsToPath(connectionPointsShifted(a, b, shift, offA, offB));
 }
 
-function lerpPt(p, q, t) {
-  return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t };
-}
-
-function lerpConnPoints(from, to, t) {
-  return {
-    p0: lerpPt(from.p0, to.p0, t),
-    p1: lerpPt(from.p1, to.p1, t),
-    c1: lerpPt(from.c1, to.c1, t),
-    c2: lerpPt(from.c2, to.c2, t),
-  };
-}
-
-function sameConnPoints(a, b) {
-  if (!a || !b) return false;
-  for (const k of ["p0", "p1", "c1", "c2"]) {
-    if (Math.abs(a[k].x - b[k].x) > 0.01 || Math.abs(a[k].y - b[k].y) > 0.01)
-      return false;
-  }
-  return true;
-}
-
 function edgeKey(r, p) {
   if (p.x === r.x) return "L";
   if (p.x === r.x + r.w) return "R";
@@ -509,71 +487,9 @@ function loadTiles() {
   }
 }
 
-// Eased flow for connection arrows: mounts fade in (CSS class below),
-// deletions fade out (leaving class), and every geometry change tweens the
-// cubic points toward their target — so links glide when tiles drag, resize,
-// or regroup on edges instead of snapping. DOM attributes update straight
-// from rAF (no re-render churn); React's d prop stays the source of truth.
-const CONN_FLOW_MS = 200;
-
-function ConnPaths({ pts, d, sel, leaving, onPick, onMenu }) {
-  const hitRef = useRef(null);
-  const lineRef = useRef(null);
-  const curRef = useRef(null);
-  const rafRef = useRef(0);
-  useEffect(() => {
-    const from = curRef.current || pts;
-    if (sameConnPoints(from, pts)) {
-      curRef.current = pts;
-      return;
-    }
-    const t0 = performance.now();
-    cancelAnimationFrame(rafRef.current);
-    const tick = (now) => {
-      const t = Math.min(1, (now - t0) / CONN_FLOW_MS);
-      const e = 1 - Math.pow(1 - t, 3);
-      const cur = lerpConnPoints(from, pts, e);
-      curRef.current = cur;
-      const dd = pointsToPath(cur);
-      hitRef.current?.setAttribute("d", dd);
-      lineRef.current?.setAttribute("d", dd);
-      if (t < 1) rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [pts]);
-  return (
-    <>
-      {/* fat invisible hit area */}
-      <path
-        ref={hitRef}
-        d={d}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={14}
-        className="conn-hit"
-        style={{ pointerEvents: "stroke", cursor: "pointer" }}
-        onClick={onPick}
-        onContextMenu={onMenu}
-      />
-      <path
-        ref={lineRef}
-        d={d}
-        fill="none"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        markerEnd="url(#atless-conn-arrow)"
-        className={leaving ? "opacity-0" : "opacity-100"}
-        style={{
-          stroke: sel ? "var(--conn-sel)" : "var(--conn-stroke)",
-          transition: "opacity 150ms ease-out",
-          pointerEvents: "none",
-        }}
-      />
-    </>
-  );
-}
-
+// Connection arrows mount with a CSS fade-in (animate-conn-in) and fade out
+// on delete (leaving class). Geometry itself renders directly every frame —
+// no tweening — so links track tiles exactly during drags and resizes.
 /** Inner canvas surface — must live inside TransformWrapper to use its context. */
 function CanvasSurface({
   tiles,
@@ -693,12 +609,15 @@ function CanvasSurface({
           const leaving = leavingConnIds.includes(c.id);
           return (
             <g key={c.id} className="animate-conn-in">
-              <ConnPaths
-                pts={pts}
+              {/* fat invisible hit area */}
+              <path
                 d={pointsToPath(pts)}
-                sel={sel}
-                leaving={leaving}
-                onPick={(e) => {
+                fill="none"
+                stroke="transparent"
+                strokeWidth={14}
+                className="conn-hit"
+                style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                onClick={(e) => {
                   e.stopPropagation();
                   if (e.ctrlKey || e.metaKey) selectConnection(c.id, true);
                   else selectConnection(c.id, false);
@@ -707,6 +626,19 @@ function CanvasSurface({
                   e.preventDefault();
                   e.stopPropagation();
                   openMenu({ x: e.clientX, y: e.clientY, id: c.id });
+                }}
+              />
+              <path
+                d={pointsToPath(pts)}
+                fill="none"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                markerEnd="url(#atless-conn-arrow)"
+                className={leaving ? "opacity-0" : "opacity-100"}
+                style={{
+                  stroke: sel ? "var(--conn-sel)" : "var(--conn-stroke)",
+                  transition: "opacity 150ms ease-out",
+                  pointerEvents: "none",
                 }}
               />
             </g>
