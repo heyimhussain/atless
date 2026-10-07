@@ -28,8 +28,10 @@ export default function GeminiIcon({ size = 15, className = "" }) {
           gradientUnits="userSpaceOnUse"
         >
           <stop offset="0" stopColor="#4285F4" />
-          <stop offset="0.35" stopColor="#34A853" />
-          <stop offset="0.65" stopColor="#FBBC05" />
+          <stop offset="0.4" stopColor="#4285F4" />
+          <stop offset="0.55" stopColor="#34A853" />
+          <stop offset="0.7" stopColor="#FBBC05" />
+          <stop offset="0.85" stopColor="#EA4335" />
           <stop offset="1" stopColor="#EA4335" />
         </linearGradient>
       </defs>
