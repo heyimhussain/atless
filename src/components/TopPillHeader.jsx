@@ -188,7 +188,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
     if (themeTimer.current) window.clearTimeout(themeTimer.current);
     themeTimer.current = window.setTimeout(
       () => root.classList.remove("theming"),
-      400,
+      250,
     );
     try {
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");

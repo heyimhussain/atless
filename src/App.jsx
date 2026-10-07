@@ -2415,9 +2415,9 @@ export default function App() {
       if (!w || !h) return;
       ctx.clearRect(0, 0, w, h);
       const target = document.documentElement.classList.contains("dark") ? 1 : 0;
-      // Drawn frames land ~66ms apart, so this sweeps the palette in ~350ms —
-      // the same duration as the CSS crossover above.
-      mix += Math.max(-0.19, Math.min(0.19, target - mix));
+      // Drawn frames land ~66ms apart, so this sweeps the palette in ~200ms —
+      // the same duration as the CSS crossover.
+      mix += Math.max(-0.33, Math.min(0.33, target - mix));
       if (Math.abs(target - mix) < 0.002) mix = target;
       // Screen-fixed checkered grid: it never translates with pan or zoom,
       // so canvas motion can't feel dizzying. Only the wave phase and the
