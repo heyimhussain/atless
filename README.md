@@ -101,7 +101,7 @@ constant above — the app surfaces API error details in toasts and tooltips.
 | Typefaces | [DM Sans](https://fonts.google.com/specimen/DM+Sans) (body text) + [Outfit](https://fonts.google.com/specimen/Outfit) (display/titles), loaded from Google Fonts in `index.html` |
 | Sailship logo / favicon | Original `public/favicon.svg` — also the mark beside this README's title |
 | UI icons | [`lucide-react`](https://lucide.dev) everywhere (it ships no brand icons, so the About tab's GitHub mark is the official SVG inlined) |
-| Otter easter egg | `public/otter.gif` — see the hint at the very bottom of this file |
+| Otter | `public/otter.gif`, via [stormhacks.com/faq](https://www.stormhacks.com/faq) |
 | Background glyphs | Plain unicode (`· ~ ≈ ∿ ≋`) painted on canvas — no font or image dependency |
 | AI + data services | Google Gemini, ElevenLabs, Tiger Data (Postgres), Cloudflare Workers/Hyperdrive — keys in `.env`, backend in `server/README.md` |
 
