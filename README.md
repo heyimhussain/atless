@@ -94,11 +94,23 @@ VITE_SHARE_API_URL=http://localhost:8787
 If a provider retires a model (HTTP 404 naming its replacement), update the
 constant above — the app surfaces API error details in toasts and tooltips.
 
+## Assets & credits
+
+| Asset | Source |
+| --- | --- |
+| Typefaces | [DM Sans](https://fonts.google.com/specimen/DM+Sans) (body text) + [Outfit](https://fonts.google.com/specimen/Outfit) (display/titles), loaded from Google Fonts in `index.html` |
+| Sailship logo / favicon | Original `public/favicon.svg` — also the mark beside this README's title |
+| UI icons | [`lucide-react`](https://lucide.dev) everywhere (it ships no brand icons, so the About tab's GitHub mark is the official SVG inlined) |
+| Otter easter egg | `public/otter.gif` — see the hint at the very bottom of this file |
+| Background glyphs | Plain unicode (`· ~ ≈ ∿ ≋`) painted on canvas — no font or image dependency |
+| AI + data services | Google Gemini, ElevenLabs, Tiger Data (Postgres), Cloudflare Workers/Hyperdrive — keys in `.env`, backend in `server/README.md` |
+
 ## Project structure
 
 ```text
 ├── index.html                  # title, favicon, pre-paint theme script
 ├── public/favicon.svg          # app logo / favicon
+├── public/otter.gif            # easter-egg otter (see the hint at the bottom)
 ├── src/
 │   ├── main.jsx                # React entry
 │   ├── index.css               # Tailwind, fonts, wave layer, animation + scrollbar helpers
@@ -113,7 +125,8 @@ constant above — the app surfaces API error details in toasts and tooltips.
 │       ├── TileMenu.jsx        # right-click tile context menu
 │       ├── TileName.jsx        # inline tile rename field
 ├── src/lib/
-│   └── tileName.js             # display-name fallback (custom name, first word, type)
+│   ├── tileName.js             # display-name fallback (custom name, first word, type)
+│   └── highlight.jsx           # search match highlighting (accent-tinted marks)
 ├── server/                     # share-link backend (see server/README.md)
 │   ├── src/index.js            # Cloudflare Worker: POST/GET /api/shares to Tiger Data
 │   ├── schema.sql              # shares table migration (run once via psql)
