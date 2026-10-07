@@ -282,10 +282,6 @@ function pointsToPath({ p0, p1, c1, c2 }) {
   return `M${p0.x},${p0.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${p1.x},${p1.y}`;
 }
 
-function connectionPathShifted(a, b, shift, offA = 0, offB = 0) {
-  return pointsToPath(connectionPointsShifted(a, b, shift, offA, offB));
-}
-
 function edgeKey(r, p) {
   if (p.x === r.x) return "L";
   if (p.x === r.x + r.w) return "R";
@@ -377,10 +373,6 @@ function computeConnGeometry(connections, tileById) {
     }
   }
   return { offsets, laterals };
-}
-
-function connectionPath(a, b) {
-  return connectionPathShifted(a, b, { x: 0, y: 0 });
 }
 
 // Does a connection's curve pass through rect r? Samples the cubic so a
@@ -1370,7 +1362,7 @@ export default function App() {
         }
       }
     })();
-  }, []);
+  }, [clearConnSelection, showToast]);
 
   // ---- tile connections: pick a source from its menu, then click a target ----
   const [connecting, setConnecting] = useState(null); // source tile id
@@ -2357,7 +2349,7 @@ export default function App() {
           : "Could not start recording.",
       );
     }
-  }, [nextId, stopTimer, clientToContent, viewportCenterContent, getMicStream]);
+  }, [nextId, clientToContent, viewportCenterContent, getMicStream]);
 
   // Track the cursor so recordings can land where the pointer is.
   // Also drives the welcome card's cursor-following glow.
@@ -2542,8 +2534,9 @@ export default function App() {
       stopTimer();
       stopPreview();
       try {
-        recorderRef.current?.state !== "inactive" &&
+        if (recorderRef.current?.state !== "inactive") {
           recorderRef.current?.stop?.();
+        }
       } catch {
         /* noop */
       }

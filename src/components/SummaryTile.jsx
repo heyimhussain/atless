@@ -23,7 +23,7 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={{
-          a: ({ node, ...props }) => (
+          a: ({ node: _node, ...props }) => (
             <a {...props} target="_blank" rel="noreferrer" />
           ),
         }}
@@ -79,7 +79,7 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
       cancelled = true;
       clearTimeout(t);
     };
-  }, [tile.text, fontsReady]);
+  }, [tile.text, tile.id, tile.h, onChange, fontsReady]);
 
   const commitName = (v) => {
     setRenaming(false);

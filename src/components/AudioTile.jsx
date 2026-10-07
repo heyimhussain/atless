@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
-import { GripHorizontal, X, Play, Pause, Mic, Pencil, Loader2 } from "lucide-react";
+import { GripHorizontal, X, Play, Pause, Mic, Pencil, Loader2, FileX } from "lucide-react";
 import TileName, { NameHint } from "./TileName.jsx";
 import { highlightParts } from "../lib/highlight.jsx";
 
@@ -168,7 +168,7 @@ export default function AudioTile({ tile, scale, selected, busy, leaving, onChan
 
         {!tile.src ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1.5 px-3 text-center">
-            <FileWarning size={18} className="shrink-0 text-neutral-300 dark:text-stone-600" />
+            <FileX size={18} className="shrink-0 text-neutral-300 dark:text-stone-600" />
             <span className="text-[11px] leading-snug text-neutral-400 dark:text-stone-500">
               Audio too large to auto-save on this device
             </span>
