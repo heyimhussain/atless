@@ -29,7 +29,7 @@ function MenuButton({ icon: Icon, label, onClick, disabled, spin, danger, rainbo
         )}
       </span>
       {rainbow ? (
-        <span className="bg-[linear-gradient(to_right,#2563eb,#dc2626,#ca8a04,#16a34a)] bg-clip-text text-transparent dark:bg-[linear-gradient(to_right,#93c5fd,#fca5a5,#fde047,#86efac)]">
+        <span className="bg-[linear-gradient(to_right,#2563eb,#16a34a,#ca8a04,#dc2626)] bg-clip-text text-transparent dark:bg-[linear-gradient(to_right,#93c5fd,#86efac,#fde047,#fca5a5)]">
           {label}
         </span>
       ) : (
