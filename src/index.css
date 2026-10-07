@@ -118,6 +118,14 @@ body {
   animation: conn-in 0.22s ease-out;
 }
 
+/* Consistent text rasterization in both themes: without this, browsers flip
+   between subpixel and grayscale antialiasing when the crossover colors
+   settle, which reads as every word "popping" at the end of the flip. */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Smooth theme crossover: while .theming sits on <html>, color-bearing
    properties ease instead of snapping (the class is removed after the flip,
    so interaction transitions are only borrowed for a moment). */
