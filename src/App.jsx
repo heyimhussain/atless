@@ -25,7 +25,9 @@ const SUM_W = 300;
 const SUM_H = 220;
 // Current model per Google (gemini-2.0-flash was retired); change here
 // if the lineup moves again.
-const GEMINI_MODEL = "gemini-3.8-flash";
+// Tried in order on 429/503: fast high-capacity primary first, heavier
+// fallback second. Reorder to prefer a different model.
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"];
 // ElevenLabs read-aloud voice + current TTS model (legacy monolingual models
 // may 422 — flip TTS_MODEL_ID back if needed).
 const TTS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -1055,43 +1057,73 @@ export default function App() {
     const scoped = askTileId !== null;
     setAsking(true);
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: {
-              parts: [
-                {
-                  text: scoped
-                    ? "You are looking at a single tile from the user's spatial canvas. Answer only about this tile: its text, transcript, image, or recording as provided. Answer the question directly. Format with GitHub-flavored Markdown (headings, bullets, tables, code blocks where they help). Typeset math with LaTeX: $...$ inline, $$...$$ display."
-                    : "You are a spatial canvas AI assistant. The user asks about everything on their canvas: text notes, audio transcripts and recordings, images, and video references are provided below. Answer the question directly using anything relevant. Format with GitHub-flavored Markdown (headings, bullets, tables, code blocks where they help). Typeset math with LaTeX: $...$ inline, $$...$$ display.",
-                },
-              ],
+      const body = {
+        system_instruction: {
+          parts: [
+            {
+              text: scoped
+                ? "You are looking at a single tile from the user's spatial canvas. Answer only about this tile: its text, transcript, image, or recording as provided. Answer the question directly. Format with GitHub-flavored Markdown (headings, bullets, tables, code blocks where they help). Typeset math with LaTeX: $...$ inline, $$...$$ display."
+                : "You are a spatial canvas AI assistant. The user asks about everything on their canvas: text notes, audio transcripts and recordings, images, and video references are provided below. Answer the question directly using anything relevant. Format with GitHub-flavored Markdown (headings, bullets, tables, code blocks where they help). Typeset math with LaTeX: $...$ inline, $$...$$ display.",
             },
-            contents: [{ parts: [...parts, { text: `${lines.join("\n")}\n\nQuestion: ${question}` }] }],
-            generationConfig: { temperature: scoped ? 0.4 : 0.7, maxOutputTokens: 2048 },
-          }),
+          ],
         },
-      );
-      if (!res.ok) {
-        let detail = `HTTP ${res.status}`;
+        contents: [{ parts: [...parts, { text: `${lines.join("\n")}\n\nQuestion: ${question}` }] }],
+        generationConfig: { temperature: scoped ? 0.4 : 0.7, maxOutputTokens: 2048 },
+      };
+      let answer = "";
+      let usedModel = "";
+      let lastErr = null;
+      for (const model of GEMINI_MODELS) {
         try {
-          const errJson = await res.json();
-          const msg = errJson?.error?.message;
-          if (msg && typeof msg === "string") detail += ` — ${msg}`;
-          console.error("Gemini ask error:", res.status, errJson);
-        } catch {
-          console.error("Gemini ask error:", res.status);
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            },
+          );
+          if (res.status === 429 || res.status === 503) {
+            let detail = `HTTP ${res.status}`;
+            try {
+              const errJson = await res.json();
+              const msg = errJson?.error?.message;
+              if (msg && typeof msg === "string") detail += ` — ${msg}`;
+            } catch {
+              /* keep status */
+            }
+            lastErr = new Error(detail);
+            console.warn(`Gemini ${model} saturated, trying fallback…`);
+            continue;
+          }
+          if (!res.ok) {
+            let detail = `HTTP ${res.status}`;
+            try {
+              const errJson = await res.json();
+              const msg = errJson?.error?.message;
+              if (msg && typeof msg === "string") detail += ` — ${msg}`;
+              console.error("Gemini ask error:", res.status, errJson);
+            } catch {
+              console.error("Gemini ask error:", res.status);
+            }
+            throw new Error(detail);
+          }
+          const json = await res.json();
+          answer = extractGeminiText(json).trim();
+          usedModel = model;
+          break;
+        } catch (err) {
+          // Network-level failure: fail over to the next model.
+          if (err instanceof TypeError) {
+            lastErr = err;
+            console.warn(`Gemini ${model} unreachable, trying fallback…`);
+            continue;
+          }
+          throw err;
         }
-        throw new Error(detail);
       }
-      const json = await res.json();
-      const answer = extractGeminiText(json).trim();
       if (!answer) {
-        showToast("Gemini returned an empty answer");
-        return;
+        throw lastErr || new Error("empty answer");
       }
       let x = 0;
       let y = 0;
@@ -1126,7 +1158,11 @@ export default function App() {
         },
       ]);
       closeAskPill();
-      showToast("Answer ready");
+      showToast(
+        usedModel === GEMINI_MODELS[0]
+          ? "Answer ready"
+          : `Primary model busy — answered with ${usedModel}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast(`Ask failed (${msg || "network error"})`, 4000);
