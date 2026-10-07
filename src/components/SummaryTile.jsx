@@ -34,6 +34,29 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
     [tile.text],
   );
 
+  // KaTeX positions fractions from its webfont metrics — painting before
+  // the fonts arrive crushes numerators into denominators (fallback serif
+  // metrics). Hold raw text until the fonts are ready; it swaps in cleanly.
+  const [fontsReady, setFontsReady] = useState(
+    () =>
+      typeof document === "undefined" ||
+      !document.fonts?.check ||
+      (document.fonts.check("16px KaTeX_Main") &&
+        document.fonts.check("italic 16px KaTeX_Math")),
+  );
+  useEffect(() => {
+    if (fontsReady || !document.fonts?.ready) return;
+    let on = true;
+    document.fonts.ready
+      .then(() => {
+        if (on) setFontsReady(true);
+      })
+      .catch(() => {});
+    return () => {
+      on = false;
+    };
+  }, [fontsReady]);
+
   // Grow the tile to fit a fresh answer (capped); manual resizes after that
   // are respected until the next answer arrives.
   useEffect(() => {
@@ -56,7 +79,7 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
       cancelled = true;
       clearTimeout(t);
     };
-  }, [tile.text]);
+  }, [tile.text, fontsReady]);
 
   const commitName = (v) => {
     setRenaming(false);
@@ -155,8 +178,10 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
             <div className="whitespace-pre-wrap">
               {highlightParts(tile.text, highlight)}
             </div>
-          ) : (
+          ) : fontsReady ? (
             answerBody
+          ) : (
+            <div className="whitespace-pre-wrap">{tile.text}</div>
           )}
         </div>
       </div>
