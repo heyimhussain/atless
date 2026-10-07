@@ -1,6 +1,7 @@
-import { Download, FileText, Loader2, MessageCircle, Spline, Square, Trash2, Volume2 } from "lucide-react";
+import { Download, FileText, Loader2, Spline, Square, Trash2, Volume2 } from "lucide-react";
+import GeminiIcon from "./GeminiIcon.jsx";
 
-function MenuButton({ icon: Icon, label, onClick, disabled, spin, danger }) {
+function MenuButton({ icon: Icon, label, onClick, disabled, spin, danger, rainbow }) {
   return (
     <button
       onClick={(e) => {
@@ -14,14 +15,26 @@ function MenuButton({ icon: Icon, label, onClick, disabled, spin, danger }) {
           : "text-stone-700 hover:bg-neutral-100 dark:text-stone-200 dark:hover:bg-white/10"
       }`}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 dark:bg-white/10 dark:text-stone-400">
+      <span
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+          rainbow
+            ? "bg-transparent"
+            : "bg-neutral-100 text-neutral-500 dark:bg-white/10 dark:text-stone-400"
+        }`}
+      >
         {spin ? (
           <Loader2 size={13} className="animate-spin" />
         ) : (
           <Icon size={13} />
         )}
       </span>
-      {label}
+      {rainbow ? (
+        <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent dark:from-blue-300 dark:via-purple-300 dark:to-pink-300">
+          {label}
+        </span>
+      ) : (
+        label
+      )}
     </button>
   );
 }
@@ -82,8 +95,8 @@ export default function TileMenu({
           />
         </>
       )}
-      <MenuButton icon={MessageCircle} label="Ask Gemini" onClick={onAsk} />
       <MenuButton icon={Spline} label="Make connection" onClick={onConnect} />
+      <MenuButton icon={GeminiIcon} label="Ask Gemini" rainbow onClick={onAsk} />
       <MenuButton icon={Trash2} label="Delete" danger onClick={onDelete} />
     </div>
   );

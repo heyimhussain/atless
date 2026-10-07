@@ -5,7 +5,8 @@ import {
   useTransformContext,
   useControls,
 } from "react-zoom-pan-pinch";
-import { Loader2, Search, Send, Sparkles, Trash2, Type, X } from "lucide-react";
+import { Loader2, Search, Send, Trash2, Type, X } from "lucide-react";
+import GeminiIcon from "./components/GeminiIcon.jsx";
 import TopPillHeader from "./components/TopPillHeader.jsx";
 import TextNote from "./components/TextNote.jsx";
 import MediaTile, { MEDIA_HEADER_H } from "./components/MediaTile.jsx";
@@ -989,9 +990,11 @@ export default function App() {
   const [askTileId, setAskTileId] = useState(null);
   const [askText, setAskText] = useState("");
   const askInputRef = useRef(null);
+  const askPillRef = useRef(null);
 
   const openAskPill = useCallback((tileId) => {
     setAskTileId(tileId || null);
+    setAskText("");
     setAskOpen(true);
   }, []);
 
@@ -1000,11 +1003,26 @@ export default function App() {
     setAskText("");
   }, []);
 
+  const toggleAskPill = useCallback(() => {
+    if (askOpen) closeAskPill();
+    else openAskPill(null);
+  }, [askOpen, closeAskPill, openAskPill]);
+
   useEffect(() => {
     if (!askOpen) return;
     const t = setTimeout(() => askInputRef.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [askOpen]);
+
+  // Clicking anywhere off the pill dismisses it (the header button toggles).
+  useEffect(() => {
+    if (!askOpen) return;
+    const onDown = (e) => {
+      if (!askPillRef.current?.contains(e.target)) closeAskPill();
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [askOpen, closeAskPill]);
 
   const askGemini = useCallback(async () => {
     const question = askText.trim();
@@ -2523,8 +2541,7 @@ export default function App() {
         />
       )}
       <TopPillHeader
-        onAskGemini={() => openAskPill(null)}
-        asking={asking}
+        onAskGemini={toggleAskPill}
         onShare={shareCanvas}
         sharing={sharing}
         otterOn={otterOn}
@@ -2586,8 +2603,11 @@ export default function App() {
             ? tiles.find((t) => t.id === askTileId)
             : null;
           return (
-            <div className="absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 bg-white/80 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85 dark:ring-white/10">
-              <Sparkles size={14} className="shrink-0 text-blue-500 dark:text-amber-400" />
+            <div
+              ref={askPillRef}
+              className="absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 bg-gradient-to-r from-blue-100/85 via-white/80 to-green-100/85 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:from-blue-950/85 dark:via-stone-900/85 dark:to-emerald-950/85 dark:ring-white/10"
+            >
+              <GeminiIcon size={15} className="shrink-0" />
               <input
                 ref={askInputRef}
                 value={askText}
@@ -2619,15 +2639,8 @@ export default function App() {
                 {asking ? (
                   <Loader2 size={13} className="animate-spin" />
                 ) : (
-                  <Send size={13} />
+                  <Send size={13} className="-translate-x-px translate-y-px" />
                 )}
-              </button>
-              <button
-                onClick={closeAskPill}
-                aria-label="Close ask"
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-neutral-400 outline-none transition hover:bg-neutral-200/70 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-white/10 dark:hover:text-stone-200"
-              >
-                <X size={13} />
               </button>
             </div>
           );

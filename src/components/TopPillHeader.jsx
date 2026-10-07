@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tileDisplayName } from "../lib/tileName.js";
+import GeminiIcon from "./GeminiIcon.jsx";
 import {
   MousePointer2,
   ZoomIn,
@@ -18,7 +19,6 @@ import {
   Heart,
   Moon,
   Sun,
-  Sparkles,
   Loader2,
   Link2,
   X,
@@ -78,7 +78,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader({ onAskGemini, asking, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
+export default function TopPillHeader({ onAskGemini, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [tab, setTab] = useState("about"); // info panel tab
@@ -277,20 +277,6 @@ export default function TopPillHeader({ onAskGemini, asking, onShare, sharing, o
         </button>
 
         <button
-          onClick={onAskGemini}
-          disabled={asking}
-          aria-label="Ask Gemini about this canvas"
-          title="Ask Gemini"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 outline-none transition-all hover:bg-stone-900 hover:text-white active:scale-90 disabled:opacity-60 sm:h-8 sm:w-8 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
-        >
-          {asking ? (
-            <Loader2 size={15} className="animate-spin" />
-          ) : (
-            <Sparkles size={15} />
-          )}
-        </button>
-
-        <button
           onClick={onShare}
           disabled={sharing}
           aria-label="Generate link"
@@ -302,6 +288,15 @@ export default function TopPillHeader({ onAskGemini, asking, onShare, sharing, o
           ) : (
             <Link2 size={15} />
           )}
+        </button>
+
+        <button
+          onClick={onAskGemini}
+          aria-label="Ask Gemini about this canvas"
+          title="Ask Gemini"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 outline-none transition-all hover:bg-stone-900 active:scale-90 sm:h-8 sm:w-8 dark:bg-white/10 dark:hover:bg-white"
+        >
+          <GeminiIcon size={16} />
         </button>
 
         <button

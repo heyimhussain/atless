@@ -1,16 +1,62 @@
 import { Rnd } from "react-rnd";
-import { useState } from "react";
-import { Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import TileName, { NameHint } from "./TileName.jsx";
+import GeminiIcon from "./GeminiIcon.jsx";
 import { highlightParts } from "../lib/highlight.jsx";
 
 export default function SummaryTile({ tile, scale, selected, leaving, onChange, onDelete, onDraggingTile, onTileMouseDown, onTileDragStart, onTileDrag, onTileDragStop, onTileResize, onTileContextMenu, highlight }) {
   const [renaming, setRenaming] = useState(false);
+  const bodyRef = useRef(null);
+
+  // Markdown + KaTeX parsing is expensive — memoize by content so drags and
+  // resizes (which re-render every frame) reuse the parsed tree instead of
+  // re-parsing, which caused the whole-canvas jitter.
+  const answerBody = useMemo(
+    () => (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          a: ({ node, ...props }) => (
+            <a {...props} target="_blank" rel="noreferrer" />
+          ),
+        }}
+      >
+        {tile.text}
+      </ReactMarkdown>
+    ),
+    [tile.text],
+  );
+
+  // Grow the tile to fit a fresh answer (capped); manual resizes after that
+  // are respected until the next answer arrives.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    let cancelled = false;
+    const fit = () => {
+      if (cancelled) return;
+      const extra = body.scrollHeight - body.clientHeight;
+      if (extra > 4) {
+        onChange(tile.id, { h: Math.min(tile.h + extra, 640) });
+      }
+    };
+    fit();
+    const t = setTimeout(fit, 400);
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => fit()).catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [tile.text]);
 
   const commitName = (v) => {
     setRenaming(false);
@@ -77,7 +123,7 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
           }}
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            <Sparkles size={13} className="shrink-0 text-blue-500 dark:text-blue-300" />
+            <GeminiIcon size={14} className="shrink-0" />
             {renaming ? (
               <TileName name={tile.name} placeholder="Gemini answer" onCommit={commitName} />
             ) : tile.name ? (
@@ -101,23 +147,16 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
           </button>
         </div>
 
-        <div className="md-body no-drag min-h-0 flex-1 overflow-y-auto p-3 text-[13px] leading-relaxed break-words text-stone-700 dark:text-stone-200">
+        <div
+          ref={bodyRef}
+          className="md-body no-drag min-h-0 flex-1 overflow-y-auto p-3 text-[13px] leading-relaxed break-words text-stone-700 dark:text-stone-200"
+        >
           {highlight ? (
             <div className="whitespace-pre-wrap">
               {highlightParts(tile.text, highlight)}
             </div>
           ) : (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-              components={{
-                a: ({ node, ...props }) => (
-                  <a {...props} target="_blank" rel="noreferrer" />
-                ),
-              }}
-            >
-              {tile.text}
-            </ReactMarkdown>
+            answerBody
           )}
         </div>
       </div>
