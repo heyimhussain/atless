@@ -252,6 +252,31 @@ body {
   );
 }
 
+/* Wide variant for the ask pill: swept left-to-right so blue and green own
+   the sides with red/yellow passing through the middle. */
+.gemini-surface-wide {
+  background-image: linear-gradient(
+    to right,
+    rgba(66, 133, 244, 0.16) 0%,
+    rgba(66, 133, 244, 0.16) 30%,
+    rgba(234, 67, 53, 0.1) 43%,
+    rgba(251, 188, 5, 0.13) 57%,
+    rgba(52, 168, 83, 0.14) 70%,
+    rgba(52, 168, 83, 0.14) 100%
+  );
+}
+.dark .gemini-surface-wide {
+  background-image: linear-gradient(
+    to right,
+    rgba(66, 133, 244, 0.26) 0%,
+    rgba(66, 133, 244, 0.26) 30%,
+    rgba(234, 67, 53, 0.18) 43%,
+    rgba(251, 188, 5, 0.16) 57%,
+    rgba(52, 168, 83, 0.23) 70%,
+    rgba(52, 168, 83, 0.23) 100%
+  );
+}
+
 /* Consistent text rasterization in both themes: without this, browsers flip
    between subpixel and grayscale antialiasing when the crossover colors
    settle, which reads as every word "popping" at the end of the flip. */

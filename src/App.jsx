@@ -2608,7 +2608,7 @@ export default function App() {
           return (
             <div
               ref={askPillRef}
-              className="gemini-surface absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:ring-white/10"
+              className="gemini-surface-wide absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:ring-white/10"
             >
               <GeminiIcon size={15} className="shrink-0" />
               <input
