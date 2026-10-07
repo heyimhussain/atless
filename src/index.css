@@ -133,13 +133,14 @@ html.theming,
 html.theming *,
 html.theming *::before,
 html.theming *::after {
+  /* Linear on purpose: ease's slow tail reads as "stuck, then pops" on text. */
   transition:
-    background-color 0.35s ease,
-    border-color 0.35s ease,
-    color 0.35s ease,
-    fill 0.35s ease,
-    stroke 0.35s ease,
-    box-shadow 0.35s ease;
+    background-color 0.35s linear,
+    border-color 0.35s linear,
+    color 0.35s linear,
+    fill 0.35s linear,
+    stroke 0.35s linear,
+    box-shadow 0.35s linear;
 }
 
 /* Easter-egg otter: pops in once, then bobs gently forever */
