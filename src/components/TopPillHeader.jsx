@@ -21,6 +21,7 @@ import {
   Sparkles,
   Loader2,
   Link2,
+  ExternalLink,
   X,
 } from "lucide-react";
 
@@ -81,6 +82,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
 export default function TopPillHeader({ onSummarize, summarizing, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
+  const [tab, setTab] = useState("about"); // info panel tab
   const [dark, setDark] = useState(
     () =>
       typeof document !== "undefined" &&
@@ -119,6 +121,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
       hideTimer.current = null;
     }
     hideConn();
+    setTab("about");
     setOpen(true);
     // Let the mount commit before flipping the transition state.
     requestAnimationFrame(() => {
@@ -233,8 +236,8 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
         <button
           onClick={() => (open ? hidePanel() : showPanel())}
           aria-expanded={open}
-          aria-label="Show shortcuts"
-          title="Shortcuts"
+          aria-label="Info"
+          title="Info"
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-all active:scale-90 sm:h-8 sm:w-8 ${
             open
               ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
@@ -309,40 +312,82 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
       {open && (
         <div
           role="dialog"
-          aria-label="Keyboard shortcuts"
+          aria-label="Info"
           className={`absolute top-[calc(100%+8px)] left-1/2 w-max max-w-[92vw] -translate-x-1/2 rounded-2xl border border-white/60 bg-white/85 p-2 shadow-xl ring-1 ring-black/5 backdrop-blur-xl transition-all duration-200 ease-out dark:border-white/10 dark:bg-stone-900/90 dark:ring-white/10 ${
             shown
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
           }`}
         >
-          <div className="grid max-h-[60vh] grid-cols-1 gap-0.5 overflow-y-auto min-[480px]:grid-cols-2 lg:grid-cols-3">
-            {HELP_ITEMS.map((item) => (
-              <HelpItem key={item.desc} {...item} />
+          <div
+            role="tablist"
+            aria-label="Info sections"
+            className="mb-1 flex gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-white/10"
+          >
+            {["about", "shortcuts"].map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className={`flex-1 rounded-lg px-4 py-1 text-[11px] font-semibold tracking-wider uppercase transition outline-none ${
+                  tab === t
+                    ? "bg-white text-stone-900 shadow-sm dark:bg-white dark:text-stone-900"
+                    : "text-neutral-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-100"
+                }`}
+              >
+                {t}
+              </button>
             ))}
           </div>
-          <div className="mt-1 flex items-center justify-center gap-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
-            <span>© 2026 Hussain Shah Hashmi - Made with</span>
-            <Heart size={11} fill="currentColor" className="shrink-0" />
-            <span>
-              for{" "}
-              {"StormHacks".split("").map((ch, i) =>
-                EGG_INDICES.includes(i) ? (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleEgg(i)}
-                    className="cursor-pointer focus:outline-none"
-                  >
-                    {ch}
-                  </button>
-                ) : (
-                  <Fragment key={i}>{ch}</Fragment>
-                ),
-              )}{" "}
-              2026
-            </span>
-          </div>
+          {tab === "about" ? (
+            <div className="w-[320px] max-w-[80vw] px-2.5 py-2">
+              <p className="text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
+                Atless is an infinite spatial canvas for collecting what&apos;s
+                on your mind: typed notes, images, videos, YouTube embeds,
+                voice recordings with transcripts, and AI-generated summaries —
+                all as movable, resizable tiles on a pannable, zoomable board
+                that persists across visits.
+              </p>
+              <a
+                href="https://github.com/heyimhussain/atless"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2.5 flex items-center gap-2 rounded-xl bg-neutral-100 px-2.5 py-2 text-[13px] font-medium text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-200 dark:hover:bg-white dark:hover:text-stone-900"
+              >
+                <ExternalLink size={14} className="shrink-0" />
+                <span className="truncate">github.com/heyimhussain/atless</span>
+              </a>
+              <div className="mt-2 flex items-center justify-center gap-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
+                <span>© 2026 Hussain Shah Hashmi - Made with</span>
+                <Heart size={11} fill="currentColor" className="shrink-0" />
+                <span>
+                  for{" "}
+                  {"StormHacks".split("").map((ch, i) =>
+                    EGG_INDICES.includes(i) ? (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleEgg(i)}
+                        className="cursor-pointer focus:outline-none"
+                      >
+                        {ch}
+                      </button>
+                    ) : (
+                      <Fragment key={i}>{ch}</Fragment>
+                    ),
+                  )}{" "}
+                  2026
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="grid max-h-[60vh] grid-cols-1 gap-0.5 overflow-y-auto min-[480px]:grid-cols-2 lg:grid-cols-3">
+              {HELP_ITEMS.map((item) => (
+                <HelpItem key={item.desc} {...item} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
