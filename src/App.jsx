@@ -1014,15 +1014,18 @@ export default function App() {
     return () => clearTimeout(t);
   }, [askOpen]);
 
-  // Clicking anywhere off the pill dismisses it (the header button toggles).
+  // Clicking anywhere off the pill dismisses it — except the header toggle
+  // button (its click handles that) and except while Gemini is thinking, so
+  // a stray canvas click can't kill an in-flight answer.
   useEffect(() => {
-    if (!askOpen) return;
+    if (!askOpen || asking) return;
     const onDown = (e) => {
+      if (e.target.closest?.("[data-ask-toggle]")) return;
       if (!askPillRef.current?.contains(e.target)) closeAskPill();
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [askOpen, closeAskPill]);
+  }, [askOpen, asking, closeAskPill]);
 
   const askGemini = useCallback(async () => {
     const question = askText.trim();
@@ -2605,7 +2608,7 @@ export default function App() {
           return (
             <div
               ref={askPillRef}
-              className="absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 bg-gradient-to-r from-blue-100/85 via-white/80 to-green-100/85 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:from-blue-950/85 dark:via-stone-900/85 dark:to-emerald-950/85 dark:ring-white/10"
+              className="gemini-surface absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:ring-white/10"
             >
               <GeminiIcon size={15} className="shrink-0" />
               <input

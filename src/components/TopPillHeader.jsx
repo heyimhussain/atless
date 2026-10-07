@@ -292,6 +292,7 @@ export default function TopPillHeader({ onAskGemini, onShare, sharing, otterOn, 
 
         <button
           onClick={onAskGemini}
+          data-ask-toggle
           aria-label="Ask Gemini about this canvas"
           title="Ask Gemini"
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 outline-none transition-all hover:bg-stone-900 active:scale-90 sm:h-8 sm:w-8 dark:bg-white/10 dark:hover:bg-white"

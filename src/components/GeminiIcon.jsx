@@ -1,7 +1,8 @@
 import { useId } from "react";
 
-// Four-point Gemini-style sparkle in Google colors (blue/red/yellow/green).
-// A component (not a lucide glyph) so the gradient fill works everywhere.
+// Classic sparkles silhouette in Google colors: the big star carries a
+// blue/red/yellow/green gradient stroke, with a solid red plus and green
+// dot for accents.
 export default function GeminiIcon({ size = 15, className = "" }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const gid = `gem-${id}`;
@@ -11,32 +12,34 @@ export default function GeminiIcon({ size = 15, className = "" }) {
       height={size}
       viewBox="0 0 24 24"
       fill="none"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
       className={className}
     >
       <defs>
         <linearGradient
           id={gid}
-          x1="4"
-          y1="2"
-          x2="20"
-          y2="22"
+          x1="3"
+          y1="3"
+          x2="21"
+          y2="21"
           gradientUnits="userSpaceOnUse"
         >
           <stop offset="0" stopColor="#4285F4" />
-          <stop offset="0.35" stopColor="#EA4335" />
+          <stop offset="0.38" stopColor="#EA4335" />
           <stop offset="0.68" stopColor="#FBBC05" />
           <stop offset="1" stopColor="#34A853" />
         </linearGradient>
       </defs>
       <path
-        d="M12 2c.7 5.2 3.1 7.6 8.3 8.3-5.2.7-7.6 3.1-8.3 8.3-.7-5.2-3.1-7.6-8.3-8.3 5.2-.7 7.6-3.1 8.3-8.3z"
-        fill={`url(#${gid})`}
+        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+        stroke={`url(#${gid})`}
       />
-      <path
-        d="M18.6 13.4c.3 2.1 1.3 3.1 3.4 3.4-2.1.3-3.1 1.3-3.4 3.4-.3-2.1-1.3-3.1-3.4-3.4 2.1-.3 3.1-1.3 3.4-3.4z"
-        fill={`url(#${gid})`}
-      />
+      <path d="M20 2v4" stroke="#EA4335" />
+      <path d="M22 4h-4" stroke="#EA4335" />
+      <circle cx="4" cy="20" r="2" stroke="#34A853" />
     </svg>
   );
 }
