@@ -2,8 +2,9 @@
 
 Atless is an infinite spatial canvas for collecting what's on your mind:
 typed notes, images, videos, YouTube embeds, voice recordings with
-transcripts, and AI-generated summaries — all as movable, resizable tiles
-on a pannable, zoomable board that persists across visits.
+transcripts, and Gemini answers with math rendering — all as movable,
+resizable tiles on a pannable, zoomable board that persists across visits
+and shares via link.
 
 ## Features
 
