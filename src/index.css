@@ -118,6 +118,21 @@ body {
   animation: conn-in 0.22s ease-out;
 }
 
+/* Smooth theme crossover: while .theming sits on <html>, color-bearing
+   properties ease instead of snapping (the class is removed after the flip,
+   so interaction transitions are only borrowed for a moment). */
+html.theming,
+html.theming *,
+html.theming *::before,
+html.theming *::after {
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease,
+    fill 0.35s ease,
+    stroke 0.35s ease;
+}
+
 /* Easter-egg otter: pops in once, then bobs gently forever */
 @keyframes otter-bob {
   0%,

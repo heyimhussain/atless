@@ -142,6 +142,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
     () => () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
       if (connTimer.current) clearTimeout(connTimer.current);
+      if (themeTimer.current) clearTimeout(themeTimer.current);
     },
     [],
   );
@@ -177,10 +178,19 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [hidePanel, showPanel]);
 
+  const themeTimer = useRef(null);
   const toggleDark = () => {
     const next = !dark;
     setDark(next);
-    document.documentElement.classList.toggle("dark", next);
+    // Borrow every transition for a smooth light/dark crossover.
+    const root = document.documentElement;
+    root.classList.add("theming");
+    root.classList.toggle("dark", next);
+    if (themeTimer.current) window.clearTimeout(themeTimer.current);
+    themeTimer.current = window.setTimeout(
+      () => root.classList.remove("theming"),
+      400,
+    );
     try {
       localStorage.setItem(THEME_KEY, next ? "dark" : "light");
     } catch {
@@ -236,8 +246,8 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
         <button
           onClick={() => (open ? hidePanel() : showPanel())}
           aria-expanded={open}
-          aria-label="Info"
-          title="Info"
+          aria-label="Information"
+          title="Information"
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full outline-none transition-all active:scale-90 sm:h-8 sm:w-8 ${
             open
               ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900"
@@ -312,8 +322,8 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
       {open && (
         <div
           role="dialog"
-          aria-label="Info"
-          className={`absolute top-[calc(100%+8px)] left-1/2 w-max max-w-[92vw] -translate-x-1/2 rounded-2xl border border-white/60 bg-white/85 p-2 shadow-xl ring-1 ring-black/5 backdrop-blur-xl transition-all duration-200 ease-out dark:border-white/10 dark:bg-stone-900/90 dark:ring-white/10 ${
+          aria-label="Information"
+          className={`absolute top-[calc(100%+8px)] left-1/2 w-[min(680px,94vw)] -translate-x-1/2 rounded-2xl border border-white/60 bg-white/85 p-2 shadow-xl ring-1 ring-black/5 backdrop-blur-xl transition-all duration-200 ease-out dark:border-white/10 dark:bg-stone-900/90 dark:ring-white/10 ${
             shown
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
@@ -321,7 +331,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
         >
           <div
             role="tablist"
-            aria-label="Info sections"
+            aria-label="Information sections"
             className="mb-1 flex gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-white/10"
           >
             {["about", "shortcuts"].map((t) => (
@@ -341,7 +351,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
             ))}
           </div>
           {tab === "about" ? (
-            <div className="w-[320px] max-w-[80vw] px-2.5 py-2">
+            <div className="w-full px-2.5 py-2">
               <p className="text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
                 Atless is an infinite spatial canvas for collecting what&apos;s
                 on your mind: typed notes, images, videos, YouTube embeds,
