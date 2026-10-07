@@ -14,7 +14,7 @@ on a pannable, zoomable board that persists across visits.
 | Images & video | Drag & drop files; aspect ratio locked; images auto-optimized for storage |
 | YouTube | Drag in any watch / share / Shorts / live link for a playable embed |
 | Voice notes | Hold `Space` or toggle `R` to record; custom player, ElevenLabs transcription, download |
-| AI summaries | One-click Gemini synthesis of notes, transcripts, images (multimodal), and video links |
+| Ask Gemini | Star button opens a prompt pill over the whole canvas (text, transcripts, recordings, images); right-click any tile → Ask Gemini for that tile alone — answers land as Markdown + LaTeX tiles |
 | Organization | Click / Ctrl+click / box-select / Ctrl+A (links included), move groups together, tile z-ordering, curved connection arrows |
 | Share links | Chain-icon button copies a `atless.tech/#/s/<id>` link; anyone opening it loads your exact canvas as an editable copy (Worker + Tiger Data, see below) |
 | Search | `Ctrl+F` finds titles and note text, then flies the camera to the match |
@@ -34,7 +34,7 @@ on a pannable, zoomable board that persists across visits.
 | Ctrl + A | Select all tiles |
 | Delete | Delete selected tiles / connections |
 | Hold Space, or press R | Record / stop voice note |
-| Right-click tile (or the ⋯ button on YouTube tiles) | Context menu (read aloud, transcribe, download, explain, connect) |
+| Right-click tile (or the ⋯ button on YouTube tiles) | Context menu (read aloud, transcribe, download, ask Gemini, connect) |
 | Ctrl + F | Search titles, notes, transcripts |
 | Right-click → Make connection | Link two tiles with a curved arrow |
 | Esc | Cancel connection / close menus |
@@ -89,7 +89,7 @@ VITE_SHARE_API_URL=http://localhost:8787
 | --- | --- | --- |
 | Read aloud | ElevenLabs TTS | Voice `JBFqnCBsd6RMkjVDRZzb`, model `eleven_multilingual_v2` (see `TTS_MODEL_ID` in `App.jsx`) |
 | Transcribe | ElevenLabs Scribe | `scribe_v2` via `POST /v1/speech-to-text` |
-| Summarize / Explain | Google Gemini | `gemini-3.8-flash` via `:generateContent` (see `GEMINI_MODEL` in `App.jsx`) |
+| Ask / Q&A | Google Gemini | `gemini-3.8-flash` via `:generateContent` (see `GEMINI_MODEL` in `App.jsx`), Markdown + LaTeX answers |
 
 If a provider retires a model (HTTP 404 naming its replacement), update the
 constant above — the app surfaces API error details in toasts and tooltips.
@@ -121,7 +121,7 @@ constant above — the app surfaces API error details in toasts and tooltips.
 │       ├── TextNote.jsx        # editable text tile + TTS preview
 │       ├── MediaTile.jsx       # image / video / YouTube tile
 │       ├── AudioTile.jsx       # voice player + transcript
-│       ├── SummaryTile.jsx     # Gemini synthesis tile
+│       ├── SummaryTile.jsx     # Gemini answer tile (Markdown + LaTeX)
 │       ├── TileMenu.jsx        # right-click tile context menu
 │       ├── TileName.jsx        # inline tile rename field
 ├── src/lib/

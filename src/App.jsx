@@ -1,17 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   TransformWrapper,
   TransformComponent,
   useTransformContext,
   useControls,
 } from "react-zoom-pan-pinch";
-import { Search, Trash2, Type, X } from "lucide-react";
+import { Loader2, Search, Send, Sparkles, Trash2, Type, X } from "lucide-react";
 import TopPillHeader from "./components/TopPillHeader.jsx";
 import TextNote from "./components/TextNote.jsx";
 import MediaTile, { MEDIA_HEADER_H } from "./components/MediaTile.jsx";
 import AudioTile from "./components/AudioTile.jsx";
-import SummaryTile from "./components/SummaryTile.jsx";
+// Markdown + KaTeX renderer loads on demand so the first paint stays lean.
+const SummaryTile = lazy(() => import("./components/SummaryTile.jsx"));
 import TileMenu from "./components/TileMenu.jsx";
+import { tileDisplayName } from "./lib/tileName.js";
 
 const NOTE_W = 230;
 const NOTE_H = 170;
@@ -108,37 +110,6 @@ function isQuotaError(err) {
   );
 }
 
-// Strip markdown/formatting residue so AI summaries render as one clean
-// plain-text paragraph: headings, quotes, list markers, rules, bold,
-// italics, and inline code are unwrapped, then everything joins up.
-function cleanSummaryText(raw) {
-  const lines = String(raw || "")
-    .replace(/\r/g, "")
-    .replace(/```[a-z]*\n?/gi, "")
-    .replace(/```/g, "")
-    .split("\n");
-  const cleaned = [];
-  for (let line of lines) {
-    let l = line.trim();
-    if (!l) continue;
-    l = l.replace(/^#{1,6}\s+/, ""); // ### Heading → Heading
-    l = l.replace(/^>\s?/, ""); // > quote → quote
-    l = l.replace(/^([-*•]|\d+[.)])\s+/, ""); // - item / 1. item → item
-    if (/^(-{3,}|_{3,}|\*{3,})$/.test(l)) continue; // ---- rules
-    l = l.replace(/(\*\*|__)(.*?)\1/g, "$2"); // **bold** → bold
-    l = l.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?;:]|$)/g, "$1$2"); // *it* → it
-    l = l.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, "$1$2"); // _it_ → it
-    l = l.replace(/`([^`\n]+)`/g, "$1"); // `code` → code
-    l = l.replace(/[*_]{2,}/g, ""); // leftover doubles
-    l = l.replace(/^[*_~>]+\s*/, ""); // leading markers
-    l = l.replace(/#{1,}/g, ""); // stray hashes
-    l = l.replace(/`/g, ""); // stray backticks
-    l = l.trim();
-    if (l) cleaned.push(l);
-  }
-  return cleaned.join(" ").replace(/\s{2,}/g, " ").trim();
-}
-
 // Extract a YouTube video ID from watch / share / shorts / live / embed URLs.
 function parseYouTubeUrl(text) {
   const str = (text || "").trim();
@@ -158,6 +129,71 @@ function tileImagePart(tile) {
   let mime = m[1].toLowerCase();
   if (mime === "image/jpg") mime = "image/jpeg";
   return { inline_data: { mime_type: mime, data: m[3] } };
+}
+
+// Extract a Gemini inline_data audio part from a voice tile (recordings and
+// drops are small enough to send inline), or null when missing or too large.
+function tileAudioPart(tile) {
+  if (tile?.type !== "audio" || typeof tile.src !== "string") return null;
+  const m = tile.src.match(/^data:(audio\/[a-z0-9.+-]+);base64,(.+)$/si);
+  if (!m || m[2].length > 12000000) return null;
+  return { inline_data: { mime_type: m[1].toLowerCase(), data: m[2] } };
+}
+
+// Flatten tiles into Gemini context: one text line per tile plus inline
+// image/audio parts (capped so requests stay sane).
+function collectTileContext(list) {
+  const lines = [];
+  const parts = [];
+  let images = 0;
+  let audios = 0;
+  for (const t of list) {
+    if (t.type === "text") {
+      const body = (t.text || "").trim();
+      const label = (t.name || "").trim();
+      if (body || label) {
+        lines.push(`- Text note${label ? ` "${label}"` : ""}: ${body || "(empty)"}`);
+      }
+    } else if (t.type === "audio") {
+      const tr = (t.transcript || "").trim();
+      const label = (t.name || "Voice note").trim();
+      if (tr) lines.push(`- Audio "${label}" transcript: ${tr}`);
+      else lines.push(`- Audio clip titled "${label}" (not transcribed)`);
+      const apart = tileAudioPart(t);
+      if (apart && audios < 4) {
+        parts.push(apart);
+        audios += 1;
+      }
+    } else if (t.type === "image") {
+      const label = (t.name || "").trim();
+      const part = tileImagePart(t);
+      if (part && images < 12) {
+        parts.push(part);
+        images += 1;
+      }
+      if (label) lines.push(`- Image "${label}"`);
+      else lines.push(`- An attached image (see image parts for visual content)`);
+    } else if (t.type === "video") {
+      const label = (t.name || "").trim();
+      if (label) lines.push(`- Video: ${label}`);
+    } else if (t.type === "youtube") {
+      const label = (t.name || "").trim();
+      const url = t.src
+        ? `https://www.youtube.com/watch?v=${t.src}`
+        : "(no link)";
+      lines.push(`- YouTube video${label ? ` "${label}"` : ""}: ${url}`);
+    } else if (t.type === "summary") {
+      const body = (t.text || "").trim();
+      if (body) lines.push(`- Previous Gemini answer: ${body}`);
+    }
+  }
+  return { lines, parts };
+}
+
+function extractGeminiText(json) {
+  return ((json?.candidates?.[0]?.content?.parts || []))
+    .map((p) => p?.text || "")
+    .join("");
 }
 
 // Anchor a connection endpoint to the edge of rect r facing (tx, ty).
@@ -673,7 +709,20 @@ function CanvasSurface({
           return <AudioTile key={tile.id} {...common} />;
         }
         if (tile.type === "summary") {
-          return <SummaryTile key={tile.id} {...common} />;
+          return (
+            <Suspense
+              key={tile.id}
+              fallback={
+                <div
+                  aria-hidden="true"
+                  className="absolute animate-pulse rounded-xl bg-white/60 dark:bg-stone-900/60"
+                  style={{ left: tile.x, top: tile.y, width: tile.w, height: tile.h }}
+                />
+              }
+            >
+              <SummaryTile {...common} />
+            </Suspense>
+          );
         }
         return <MediaTile key={tile.id} {...common} />;
       })}
@@ -934,47 +983,47 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), ms);
   }, []);
 
-  // ---- Gemini canvas summarizer ----
-  const [summarizing, setSummarizing] = useState(false);
+  // ---- Gemini Q&A: free-prompt pill (whole canvas) + per-tile Ask ----
+  const [asking, setAsking] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askTileId, setAskTileId] = useState(null);
+  const [askText, setAskText] = useState("");
+  const askInputRef = useRef(null);
 
-  const summarizeCanvas = useCallback(async () => {
-    if (summarizing) return;
-    const lines = [];
-    const imageParts = [];
-    for (const t of tilesRef.current) {
-      if (t.type === "text") {
-        const body = (t.text || "").trim();
-        const label = (t.name || "").trim();
-        if (body || label) {
-          lines.push(`- Text note${label ? ` "${label}"` : ""}: ${body || "(empty)"}`);
-        }
-      } else if (t.type === "audio") {
-        const tr = (t.transcript || "").trim();
-        const label = (t.name || "Voice note").trim();
-        if (tr) lines.push(`- Audio "${label}" transcript: ${tr}`);
-        else lines.push(`- Audio clip titled "${label}" (not transcribed)`);
-      } else if (t.type === "image") {
-        const label = (t.name || "").trim();
-        const part = tileImagePart(t);
-        if (part && imageParts.length < 12) imageParts.push(part);
-        if (label) lines.push(`- Image "${label}"`);
-        else lines.push(`- An attached image (see image parts for visual content)`);
-      } else if (t.type === "video") {
-        const label = (t.name || "").trim();
-        if (label) lines.push(`- Video: ${label}`);
-      } else if (t.type === "youtube") {
-        const label = (t.name || "").trim();
-        const url = t.src
-          ? `https://www.youtube.com/watch?v=${t.src}`
-          : "(no link)";
-        lines.push(`- YouTube video${label ? ` "${label}"` : ""}: ${url}`);
-      } else if (t.type === "summary") {
-        const body = (t.text || "").trim();
-        if (body) lines.push(`- Previous summary: ${body}`);
-      }
+  const openAskPill = useCallback((tileId) => {
+    setAskTileId(tileId || null);
+    setAskOpen(true);
+  }, []);
+
+  const closeAskPill = useCallback(() => {
+    setAskOpen(false);
+    setAskText("");
+  }, []);
+
+  useEffect(() => {
+    if (!askOpen) return;
+    const t = setTimeout(() => askInputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [askOpen]);
+
+  const askGemini = useCallback(async () => {
+    const question = askText.trim();
+    if (asking || !question) return;
+    const scope = askTileId
+      ? tilesRef.current.filter((t) => t.id === askTileId)
+      : [...tilesRef.current];
+    if (askTileId && scope.length === 0) {
+      showToast("That tile is gone — ask about the canvas instead", 4000);
+      return;
     }
-    if (lines.length === 0) {
-      showToast("Add some tiles first to summarize!");
+    const { lines, parts } = collectTileContext(scope);
+    if (lines.length === 0 && parts.length === 0) {
+      showToast(
+        askTileId
+          ? "This tile has no content to ask about"
+          : "Add some tiles first to ask about!",
+        4000,
+      );
       return;
     }
     const key = import.meta.env.VITE_GEMINI_API_KEY;
@@ -982,7 +1031,8 @@ export default function App() {
       showToast("Missing VITE_GEMINI_API_KEY — add it to .env locally or GitHub Secrets for atless.tech", 4000);
       return;
     }
-    setSummarizing(true);
+    const scoped = askTileId !== null;
+    setAsking(true);
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
@@ -993,12 +1043,14 @@ export default function App() {
             system_instruction: {
               parts: [
                 {
-                  text: "You are a spatial canvas AI assistant. Analyze all provided media—including text notes, audio transcriptions, image contents, and video references. Synthesize a structured executive summary highlighting connections across all visual and textual elements on the canvas. Respond in one plain-text paragraph with no markdown, headings, lists, bold, italics, quotes, code, or symbols such as #, *, >, -, _, or backticks — plain sentences only.",
+                  text: scoped
+                    ? "You are looking at a single tile from the user's spatial canvas. Answer only about this tile: its text, transcript, image, or recording as provided. Answer the question directly. Format with GitHub-flavored Markdown (headings, bullets, tables, code blocks where they help). Typeset math with LaTeX: $...$ inline, $$...$$ display."
+                    : "You are a spatial canvas AI assistant. The user asks about everything on their canvas: text notes, audio transcripts and recordings, images, and video references are provided below. Answer the question directly using anything relevant. Format with GitHub-flavored Markdown (headings, bullets, tables, code blocks where they help). Typeset math with LaTeX: $...$ inline, $$...$$ display.",
                 },
               ],
             },
-            contents: [{ parts: [...imageParts, { text: lines.join("\n") }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+            contents: [{ parts: [...parts, { text: `${lines.join("\n")}\n\nQuestion: ${question}` }] }],
+            generationConfig: { temperature: scoped ? 0.4 : 0.7, maxOutputTokens: 2048 },
           }),
         },
       );
@@ -1008,55 +1060,59 @@ export default function App() {
           const errJson = await res.json();
           const msg = errJson?.error?.message;
           if (msg && typeof msg === "string") detail += ` — ${msg}`;
-          console.error("Gemini summary error:", res.status, errJson);
+          console.error("Gemini ask error:", res.status, errJson);
         } catch {
-          console.error("Gemini summary error:", res.status);
+          console.error("Gemini ask error:", res.status);
         }
         throw new Error(detail);
       }
       const json = await res.json();
-      const summary = cleanSummaryText(
-        ((json?.candidates?.[0]?.content?.parts || []))
-          .map((p) => p?.text || "")
-          .join(""),
-      );
-      if (!summary) {
-        showToast("Gemini returned an empty summary");
+      const answer = extractGeminiText(json).trim();
+      if (!answer) {
+        showToast("Gemini returned an empty answer");
         return;
       }
-      const wrapper =
-        viewRef.current.wrapper ?? instanceRef.current?.wrapperComponent;
-      let cx = 0;
-      let cy = 0;
-      if (wrapper) {
-        const rect = wrapper.getBoundingClientRect();
-        const p = clientToContent(
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2,
-        );
-        cx = p.x;
-        cy = p.y;
+      let x = 0;
+      let y = 0;
+      if (scoped) {
+        const anchor = scope[0];
+        x = anchor.x + anchor.w + 24;
+        y = anchor.y;
+      } else {
+        const wrapper =
+          viewRef.current.wrapper ?? instanceRef.current?.wrapperComponent;
+        if (wrapper) {
+          const rect = wrapper.getBoundingClientRect();
+          const p = clientToContent(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          x = p.x - SUM_W / 2;
+          y = p.y - SUM_H / 2;
+        }
       }
       setTiles((prev) => [
         ...prev,
         {
           id: nextId("summary"),
           type: "summary",
-          x: cx - SUM_W / 2,
-          y: cy - SUM_H / 2,
+          x,
+          y,
           w: SUM_W,
           h: SUM_H,
-          text: summary,
-          name: "Gemini Synthesis",
+          text: answer,
+          name: question.length > 60 ? `${question.slice(0, 60)}…` : question,
         },
       ]);
+      closeAskPill();
+      showToast("Answer ready");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      showToast(`Summary failed (${msg || "network error"})`, 4000);
+      showToast(`Ask failed (${msg || "network error"})`, 4000);
     } finally {
-      setSummarizing(false);
+      setAsking(false);
     }
-  }, [summarizing, showToast, clientToContent, nextId]);
+  }, [asking, askText, askTileId, showToast, clientToContent, nextId, closeAskPill]);
 
   // ---- shareable canvas links (Worker + Tiger Data, editable copy) ----
   const [sharing, setSharing] = useState(false);
@@ -1987,100 +2043,7 @@ export default function App() {
     [showToast],
   );
 
-  const explainImage = useCallback(
-    async (tile) => {
-      if (tile?.type !== "image" || busyIds.includes(tile.id)) return;
-      const key = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!key) {
-        showToast(
-          "Missing VITE_GEMINI_API_KEY — add it to .env locally or GitHub Secrets for atless.tech",
-          4000,
-        );
-        return;
-      }
-      const part = tileImagePart(tile);
-      if (!part) {
-        showToast("Couldn't read this image for analysis");
-        return;
-      }
-      setBusyIds((prev) => [...prev, tile.id]);
-      showToast("Analyzing image…", 30000);
-      try {
-        const label = (tile.name || "").trim();
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: {
-                parts: [
-                  {
-                    text: "You are a helpful visual assistant. Explain what is shown in the provided image in one plain-text paragraph. If it contains a math problem, homework question, or puzzle, solve it step by step in plain sentences and end with the final answer. No markdown, headings, lists, or symbols.",
-                  },
-                ],
-              },
-              contents: [
-                {
-                  parts: [
-                    part,
-                    {
-                      text: `Tile titled "${label || "untitled image"}". Explain it${label ? "" : " in detail"}.`,
-                    },
-                  ],
-                },
-              ],
-              generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
-            }),
-          },
-        );
-        if (!res.ok) {
-          let detail = `HTTP ${res.status}`;
-          try {
-            const errJson = await res.json();
-            const msg = errJson?.error?.message;
-            if (msg && typeof msg === "string") detail += ` — ${msg}`;
-            console.error("Gemini explain error:", res.status, errJson);
-          } catch {
-            console.error("Gemini explain error:", res.status);
-          }
-          throw new Error(detail);
-        }
-        const json = await res.json();
-        const solution = cleanSummaryText(
-          ((json?.candidates?.[0]?.content?.parts || []))
-            .map((p) => p?.text || "")
-            .join(""),
-        );
-        if (!solution) {
-          showToast("Gemini returned an empty explanation");
-          return;
-        }
-        setTiles((prev) => [
-          ...prev,
-          {
-            id: nextId("summary"),
-            type: "summary",
-            x: tile.x + tile.w + 24,
-            y: tile.y,
-            w: SUM_W,
-            h: SUM_H,
-            text: solution,
-            name: "Explanation",
-          },
-        ]);
-        showToast("Explanation ready");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        showToast(`Explanation failed (${msg || "network error"})`, 4000);
-      } finally {
-        setBusyIds((prev) => prev.filter((x) => x !== tile.id));
-      }
-    },
-    [busyIds, showToast, nextId],
-  );
-
-  // ---- right-click tile menu (text/audio/image only) ----
+  // ---- right-click tile menu ----
   const [menu, setMenu] = useState(null); // { x, y, id } in client coords; id null = background
   const [menuShown, setMenuShown] = useState(false);
   const menuTimer = useRef(null);
@@ -2560,8 +2523,8 @@ export default function App() {
         />
       )}
       <TopPillHeader
-        onSummarize={summarizeCanvas}
-        summarizing={summarizing}
+        onAskGemini={() => openAskPill(null)}
+        asking={asking}
         onShare={shareCanvas}
         sharing={sharing}
         otterOn={otterOn}
@@ -2616,6 +2579,59 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {askOpen &&
+        (() => {
+          const askTile = askTileId
+            ? tiles.find((t) => t.id === askTileId)
+            : null;
+          return (
+            <div className="absolute top-20 left-1/2 z-50 flex w-[min(440px,92vw)] -translate-x-1/2 animate-fade-slide-in items-center gap-2 rounded-full border border-white/60 bg-white/80 py-1.5 pr-2 pl-3.5 shadow-lg ring-1 ring-black/5 backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85 dark:ring-white/10">
+              <Sparkles size={14} className="shrink-0 text-blue-500 dark:text-amber-400" />
+              <input
+                ref={askInputRef}
+                value={askText}
+                onChange={(e) => setAskText(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    askGemini();
+                  } else if (e.key === "Escape") {
+                    closeAskPill();
+                  }
+                }}
+                placeholder={
+                  askTile
+                    ? `Ask about ${tileDisplayName(askTile)}…`
+                    : "Ask about your canvas…"
+                }
+                spellCheck={false}
+                disabled={asking}
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-stone-800 outline-none placeholder:text-neutral-400 disabled:opacity-60 dark:text-stone-100 dark:placeholder:text-stone-500"
+              />
+              <button
+                onClick={askGemini}
+                disabled={asking || !askText.trim()}
+                aria-label="Send question to Gemini"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-stone-900 text-white outline-none transition hover:opacity-80 active:scale-90 disabled:opacity-40 dark:bg-white dark:text-stone-900"
+              >
+                {asking ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Send size={13} />
+                )}
+              </button>
+              <button
+                onClick={closeAskPill}
+                aria-label="Close ask"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-neutral-400 outline-none transition hover:bg-neutral-200/70 hover:text-stone-700 dark:text-stone-500 dark:hover:bg-white/10 dark:hover:text-stone-200"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          );
+        })()}
 
       <div
         className="transform-wrapper-fill absolute inset-0"
@@ -2814,9 +2830,9 @@ export default function App() {
                 closeMenu();
                 downloadTile(t);
               }}
-              onExplain={() => {
+              onAsk={() => {
                 closeMenu();
-                explainImage(t);
+                openAskPill(t.id);
               }}
               onDelete={() => {
                 const id = t.id;

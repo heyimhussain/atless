@@ -78,7 +78,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader({ onSummarize, summarizing, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
+export default function TopPillHeader({ onAskGemini, asking, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [tab, setTab] = useState("about"); // info panel tab
@@ -277,13 +277,13 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
         </button>
 
         <button
-          onClick={onSummarize}
-          disabled={summarizing}
-          aria-label="Summarize canvas with Gemini"
-          title="Summarize with Gemini"
+          onClick={onAskGemini}
+          disabled={asking}
+          aria-label="Ask Gemini about this canvas"
+          title="Ask Gemini"
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 outline-none transition-all hover:bg-stone-900 hover:text-white active:scale-90 disabled:opacity-60 sm:h-8 sm:w-8 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
         >
-          {summarizing ? (
+          {asking ? (
             <Loader2 size={15} className="animate-spin" />
           ) : (
             <Sparkles size={15} />

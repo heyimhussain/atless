@@ -1,6 +1,11 @@
 import { Rnd } from "react-rnd";
 import { useState } from "react";
 import { Sparkles, X } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import TileName, { NameHint } from "./TileName.jsx";
 import { highlightParts } from "../lib/highlight.jsx";
 
@@ -74,7 +79,7 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
           <span className="flex min-w-0 items-center gap-1.5">
             <Sparkles size={13} className="shrink-0 text-blue-500 dark:text-blue-300" />
             {renaming ? (
-              <TileName name={tile.name} placeholder="Gemini Synthesis" onCommit={commitName} />
+              <TileName name={tile.name} placeholder="Gemini answer" onCommit={commitName} />
             ) : tile.name ? (
               <span className="max-w-[160px] truncate bg-[linear-gradient(to_right,#2563eb,#16a34a,#ca8a04,#dc2626)] bg-clip-text font-display text-[11px] font-medium text-transparent dark:bg-[linear-gradient(to_right,#93c5fd,#6ee7b7,#fde047,#fca5a5)]">
                 {tile.name}
@@ -96,8 +101,24 @@ export default function SummaryTile({ tile, scale, selected, leaving, onChange, 
           </button>
         </div>
 
-        <div className="no-drag min-h-0 flex-1 overflow-y-auto p-3 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-stone-700 dark:text-stone-200">
-          {highlight ? highlightParts(tile.text, highlight) : tile.text}
+        <div className="md-body no-drag min-h-0 flex-1 overflow-y-auto p-3 text-[13px] leading-relaxed break-words text-stone-700 dark:text-stone-200">
+          {highlight ? (
+            <div className="whitespace-pre-wrap">
+              {highlightParts(tile.text, highlight)}
+            </div>
+          ) : (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={{
+                a: ({ node, ...props }) => (
+                  <a {...props} target="_blank" rel="noreferrer" />
+                ),
+              }}
+            >
+              {tile.text}
+            </ReactMarkdown>
+          )}
         </div>
       </div>
     </Rnd>
