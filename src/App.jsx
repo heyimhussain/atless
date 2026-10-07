@@ -2393,6 +2393,9 @@ export default function App() {
     if (!ctx) return;
     let raf = 0;
     let last = 0;
+    // 0 = light palette, 1 = dark. Eases toward the live theme on every drawn
+    // frame so the background glides through a theme flip instead of snapping.
+    let mix = document.documentElement.classList.contains("dark") ? 1 : 0;
     const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
     const resize = () => {
       const d = dpr();
@@ -2411,7 +2414,11 @@ export default function App() {
       const h = canvas.height;
       if (!w || !h) return;
       ctx.clearRect(0, 0, w, h);
-      const dark = document.documentElement.classList.contains("dark");
+      const target = document.documentElement.classList.contains("dark") ? 1 : 0;
+      // Drawn frames land ~66ms apart, so this sweeps the palette in ~350ms —
+      // the same duration as the CSS crossover above.
+      mix += Math.max(-0.19, Math.min(0.19, target - mix));
+      if (Math.abs(target - mix) < 0.002) mix = target;
       // Screen-fixed checkered grid: it never translates with pan or zoom,
       // so canvas motion can't feel dizzying. Only the wave phase and the
       // cursor aura move.
@@ -2444,11 +2451,12 @@ export default function App() {
           let idx = Math.floor(((v + 2) / 5.5) * CHARS.length);
           if (idx < 0) idx = 0;
           else if (idx > CHARS.length - 1) idx = CHARS.length - 1;
-          const a = dark
-            ? 0.12 + idx * 0.03 + glow * 0.4
-            : 0.4 + idx * 0.05 + glow * 0.45;
+          const aLight = 0.4 + idx * 0.05 + glow * 0.45;
+          const aDark = 0.12 + idx * 0.03 + glow * 0.4;
+          const a = aLight + (aDark - aLight) * mix;
           ctx.globalAlpha = a > 1 ? 1 : a;
-          ctx.fillStyle = dark ? "#ffffff" : "#a8a29e";
+          // #a8a29e (light) → #ffffff (dark)
+          ctx.fillStyle = `rgb(${Math.round(168 + 87 * mix)},${Math.round(162 + 93 * mix)},${Math.round(158 + 97 * mix)})`;
           ctx.fillText(CHARS[idx], sx, sy);
         }
       }

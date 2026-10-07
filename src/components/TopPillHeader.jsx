@@ -350,7 +350,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
             ))}
           </div>
           {tab === "about" ? (
-            <div className="w-full px-2.5 py-2">
+            <div key="about" className="animate-fade-slide-in w-full px-2.5 py-2">
               <p className="text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
                 Atless is an infinite spatial canvas for collecting what&apos;s
                 on your mind: typed notes, images, videos, YouTube embeds,
@@ -358,8 +358,8 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
                 all as movable, resizable tiles on a pannable, zoomable board
                 that persists across visits.
               </p>
-              <div className="mt-4 flex items-end justify-between gap-2 border-t border-neutral-200/70 pt-2 dark:border-white/10">
-                <div className="flex flex-1 items-center justify-center gap-1 px-2.5 pt-1 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:text-stone-500">
+              <div className="relative mt-4 border-t border-neutral-200/70 pt-2 dark:border-white/10">
+                <div className="flex items-center justify-center gap-1 px-2.5 pt-1 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:text-stone-500">
                   <span>© 2026 Hussain Shah Hashmi - Made with</span>
                   <Heart size={11} fill="currentColor" className="shrink-0" />
                   <span>
@@ -387,7 +387,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
                   rel="noreferrer"
                   aria-label="GitHub repository"
                   title="GitHub repository"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
+                  className="absolute right-0 bottom-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -401,7 +401,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
               </div>
             </div>
           ) : (
-            <div className="grid max-h-[60vh] grid-cols-1 gap-0.5 overflow-y-auto min-[480px]:grid-cols-2 lg:grid-cols-3">
+            <div key="shortcuts" className="animate-fade-slide-in grid max-h-[60vh] grid-cols-1 gap-0.5 overflow-y-auto min-[480px]:grid-cols-2 lg:grid-cols-3">
               {HELP_ITEMS.map((item) => (
                 <HelpItem key={item.desc} {...item} />
               ))}
