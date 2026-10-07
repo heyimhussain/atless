@@ -25,9 +25,9 @@ const SUM_W = 300;
 const SUM_H = 220;
 // Current model per Google (gemini-2.0-flash was retired); change here
 // if the lineup moves again.
-// Tried in order on 429/503: fast high-capacity primary first, heavier
-// fallback second. Reorder to prefer a different model.
-const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-3.8-flash"];
+// Tried in order; each model gets one instant attempt plus one retry after
+// a short backoff on 429/503. Reorder to prefer a different model.
+const GEMINI_MODELS = ["gemini-3.8-flash"];
 // ElevenLabs read-aloud voice + current TTS model (legacy monolingual models
 // may 422 — flip TTS_MODEL_ID back if needed).
 const TTS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
@@ -1074,53 +1074,60 @@ export default function App() {
       let usedModel = "";
       let lastErr = null;
       for (const model of GEMINI_MODELS) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            },
-          );
-          if (res.status === 429 || res.status === 503) {
-            let detail = `HTTP ${res.status}`;
-            try {
-              const errJson = await res.json();
-              const msg = errJson?.error?.message;
-              if (msg && typeof msg === "string") detail += ` — ${msg}`;
-            } catch {
-              /* keep status */
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const res = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              },
+            );
+            if (res.status === 429 || res.status === 503) {
+              let detail = `HTTP ${res.status}`;
+              try {
+                const errJson = await res.json();
+                const msg = errJson?.error?.message;
+                if (msg && typeof msg === "string") detail += ` — ${msg}`;
+              } catch {
+                /* keep status */
+              }
+              lastErr = new Error(detail);
+              console.warn(`Gemini ${model} saturated (attempt ${attempt + 1})…`);
+              if (attempt === 0) {
+                await new Promise((r) => setTimeout(r, 1500));
+                continue;
+              }
+              break;
             }
-            lastErr = new Error(detail);
-            console.warn(`Gemini ${model} saturated, trying fallback…`);
-            continue;
-          }
-          if (!res.ok) {
-            let detail = `HTTP ${res.status}`;
-            try {
-              const errJson = await res.json();
-              const msg = errJson?.error?.message;
-              if (msg && typeof msg === "string") detail += ` — ${msg}`;
-              console.error("Gemini ask error:", res.status, errJson);
-            } catch {
-              console.error("Gemini ask error:", res.status);
+            if (!res.ok) {
+              let detail = `HTTP ${res.status}`;
+              try {
+                const errJson = await res.json();
+                const msg = errJson?.error?.message;
+                if (msg && typeof msg === "string") detail += ` — ${msg}`;
+                console.error("Gemini ask error:", res.status, errJson);
+              } catch {
+                console.error("Gemini ask error:", res.status);
+              }
+              throw new Error(detail);
             }
-            throw new Error(detail);
+            const json = await res.json();
+            answer = extractGeminiText(json).trim();
+            usedModel = model;
+            break;
+          } catch (err) {
+            // Network-level failure: fail over to the next model.
+            if (err instanceof TypeError) {
+              lastErr = err;
+              console.warn(`Gemini ${model} unreachable, trying fallback…`);
+              break;
+            }
+            throw err;
           }
-          const json = await res.json();
-          answer = extractGeminiText(json).trim();
-          usedModel = model;
-          break;
-        } catch (err) {
-          // Network-level failure: fail over to the next model.
-          if (err instanceof TypeError) {
-            lastErr = err;
-            console.warn(`Gemini ${model} unreachable, trying fallback…`);
-            continue;
-          }
-          throw err;
         }
+        if (answer) break;
       }
       if (!answer) {
         throw lastErr || new Error("empty answer");
