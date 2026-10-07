@@ -358,44 +358,46 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
                 all as movable, resizable tiles on a pannable, zoomable board
                 that persists across visits.
               </p>
-              <a
-                href="https://github.com/heyimhussain/atless"
-                target="_blank"
-                rel="noreferrer"
-                aria-label="GitHub repository"
-                title="GitHub repository"
-                className="mt-2.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                  className="h-4 w-4"
+              <div className="mt-4 flex items-end justify-between gap-2 border-t border-neutral-200/70 pt-2 dark:border-white/10">
+                <div className="flex flex-1 items-center justify-center gap-1 px-2.5 pt-1 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:text-stone-500">
+                  <span>© 2026 Hussain Shah Hashmi - Made with</span>
+                  <Heart size={11} fill="currentColor" className="shrink-0" />
+                  <span>
+                    for{" "}
+                    {"StormHacks".split("").map((ch, i) =>
+                      EGG_INDICES.includes(i) ? (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleEgg(i)}
+                          className="cursor-pointer focus:outline-none"
+                        >
+                          {ch}
+                        </button>
+                      ) : (
+                        <Fragment key={i}>{ch}</Fragment>
+                      ),
+                    )}{" "}
+                    2026
+                  </span>
+                </div>
+                <a
+                  href="https://github.com/heyimhussain/atless"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="GitHub repository"
+                  title="GitHub repository"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
                 >
-                  <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
-                </svg>
-              </a>
-              <div className="mt-2 flex items-center justify-center gap-1 border-t border-neutral-200/70 px-2.5 pt-2 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:border-white/10 dark:text-stone-500">
-                <span>© 2026 Hussain Shah Hashmi - Made with</span>
-                <Heart size={11} fill="currentColor" className="shrink-0" />
-                <span>
-                  for{" "}
-                  {"StormHacks".split("").map((ch, i) =>
-                    EGG_INDICES.includes(i) ? (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => handleEgg(i)}
-                        className="cursor-pointer focus:outline-none"
-                      >
-                        {ch}
-                      </button>
-                    ) : (
-                      <Fragment key={i}>{ch}</Fragment>
-                    ),
-                  )}{" "}
-                  2026
-                </span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                  >
+                    <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+                  </svg>
+                </a>
               </div>
             </div>
           ) : (
