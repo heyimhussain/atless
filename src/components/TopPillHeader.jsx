@@ -348,30 +348,15 @@ export default function TopPillHeader({ onAskGemini, onShare, sharing, stormyOn,
           {tab === "about" ? (
             <div key="about" className="animate-fade-slide-in w-full px-2.5 py-2">
               <p className="text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
-                Atless is an infinite spatial canvas for collecting what&apos;s
-                on your mind: typed notes, images, videos, YouTube embeds,
-                voice recordings with transcripts, and Gemini answers with math
-                rendering — all as movable, resizable tiles on a pannable,
-                zoomable board that persists across visits and shares via link.
+                Atless is an infinite spatial canvas for capturing and
+                connecting your thoughts with zero clutter. Gather text notes,
+                images, videos, audio files, voice recordings and YouTube
+                embeds on a persistent, zoomable board. Leverage Google Gemini
+                for instant summaries and answers, Transcribe your recordings
+                and audio files, and use Read aloud for seamless, professional
+                Test-to-Speech, then share your complete canvas with a single
+                custom link.
               </p>
-              <ul className="mt-2.5 space-y-1.5 text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
-                <li className="flex gap-2">
-                  <span aria-hidden className="text-neutral-400 dark:text-stone-500">•</span>
-                  <span><strong>Double-click</strong> anywhere to drop a note; drag in files or YouTube links to tile them.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span aria-hidden className="text-neutral-400 dark:text-stone-500">•</span>
-                  <span>Hold <strong>Space</strong> (or toggle <strong>R</strong>) to record voice notes, then transcribe them.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span aria-hidden className="text-neutral-400 dark:text-stone-500">•</span>
-                  <span><strong>Right-click</strong> any tile to read it aloud, ask Gemini about it, or link tiles with arrows.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span aria-hidden className="text-neutral-400 dark:text-stone-500">•</span>
-                  <span>The <strong>star button</strong> asks Gemini about the whole canvas; the <strong>chain button</strong> copies a share link.</span>
-                </li>
-              </ul>
               <div className="mt-4 flex items-center border-t border-neutral-200/70 pt-2 dark:border-white/10">
                 {/* Invisible counterweight to the GitHub button so the credits
                     stay truly centered while everything aligns on one axis. */}

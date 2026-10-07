@@ -1,10 +1,6 @@
 # <img src="public/favicon.svg" alt="Atless logo" width="36" height="36"> Atless — more productivity, less clutter.
 
-Atless is an infinite spatial canvas for collecting what's on your mind:
-typed notes, images, videos, YouTube embeds, voice recordings with
-transcripts, and Gemini answers with math rendering — all as movable,
-resizable tiles on a pannable, zoomable board that persists across visits
-and shares via link.
+Atless is an infinite spatial canvas for capturing and connecting your thoughts with zero clutter. Gather text notes, images, videos, audio files, voice recordings and YouTube embeds on a persistent, zoomable board. Leverage Google Gemini for instant summaries and answers, Transcribe your recordings and audio files, and use Read aloud for seamless, professional Test-to-Speech, then share your complete canvas with a single custom link.
 
 ## Features
 
