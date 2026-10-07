@@ -89,7 +89,7 @@ VITE_SHARE_API_URL=http://localhost:8787
 | --- | --- | --- |
 | Read aloud | ElevenLabs TTS | Voice `JBFqnCBsd6RMkjVDRZzb`, model `eleven_multilingual_v2` (see `TTS_MODEL_ID` in `App.jsx`) |
 | Transcribe | ElevenLabs Scribe | `scribe_v2` via `POST /v1/speech-to-text` |
-| Ask / Q&A | Google Gemini | `gemini-2.5-flash` via `:generateContent` (see `GEMINI_MODEL` in `App.jsx`), Markdown + LaTeX answers |
+| Ask / Q&A | Google Gemini | `gemini-3.5-flash` via `:generateContent` (see `GEMINI_MODEL` in `App.jsx`), Markdown + LaTeX answers |
 
 If a provider retires a model (HTTP 404 naming its replacement), update the
 constant above — the app surfaces API error details in toasts and tooltips.

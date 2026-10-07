@@ -25,7 +25,7 @@ const SUM_W = 300;
 const SUM_H = 220;
 // Current model per Google (gemini-2.0-flash was retired); change here
 // if the lineup moves again.
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 // ElevenLabs read-aloud voice + current TTS model (legacy monolingual models
 // may 422 — flip TTS_MODEL_ID back if needed).
 const TTS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
