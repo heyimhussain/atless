@@ -1181,12 +1181,12 @@ export default function App() {
   // ---- shareable canvas links (Worker + Tiger Data, editable copy) ----
   const [sharing, setSharing] = useState(false);
 
-  // Easter-egg otter (unlocked via the credits in the shortcut menu).
+  // Easter-egg Stormy (unlocked via the credits in the shortcut menu).
   // Session-only on purpose — a reload dismisses it. Missing gif fails
   // silently.
-  const [otterOn, setOtterOn] = useState(false);
-  const setOtter = useCallback((v) => {
-    setOtterOn(v);
+  const [stormyOn, setStormyOn] = useState(false);
+  const setStormy = useCallback((v) => {
+    setStormyOn(v);
   }, []);
 
   const shareCanvas = useCallback(async () => {
@@ -2573,25 +2573,25 @@ export default function App() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
-      {/* Easter-egg otter: viewport-anchored bottom-right, floating above
+      {/* Easter-egg Stormy: viewport-anchored bottom-right, floating above
           tiles but below UI chrome, never intercepting clicks.
-          Drop the gif at public/otter.gif — without it this renders nothing. */}
-      {otterOn && (
+          Drop the gif at public/stormy.gif — without it this renders nothing. */}
+      {stormyOn && (
         <img
-          src={`${import.meta.env.BASE_URL}otter.gif`}
+          src={`${import.meta.env.BASE_URL}stormy.gif`}
           alt=""
           aria-hidden="true"
           draggable={false}
-          onError={() => setOtter(false)}
-          className="animate-otter pointer-events-none fixed right-6 bottom-6 z-[45] h-[88px] w-auto max-w-[110px] rounded-2xl select-none"
+          onError={() => setStormy(false)}
+          className="animate-stormy pointer-events-none fixed right-6 bottom-6 z-[45] h-[88px] w-auto max-w-[110px] rounded-2xl select-none"
         />
       )}
       <TopPillHeader
         onAskGemini={toggleAskPill}
         onShare={shareCanvas}
         sharing={sharing}
-        otterOn={otterOn}
-        onOtterChange={setOtter}
+        stormyOn={stormyOn}
+        onStormyChange={setStormy}
         tiles={tiles}
         connections={connections}
         onFocusConnection={focusConnection}

@@ -78,7 +78,7 @@ function HelpItem({ icon: Icon, combos, desc }) {
   );
 }
 
-export default function TopPillHeader({ onAskGemini, onShare, sharing, otterOn, onOtterChange, tiles = [], connections = [], onFocusConnection }) {
+export default function TopPillHeader({ onAskGemini, onShare, sharing, stormyOn, onStormyChange, tiles = [], connections = [], onFocusConnection }) {
   const [open, setOpen] = useState(false); // mounted
   const [shown, setShown] = useState(false); // transitioned in
   const [tab, setTab] = useState("about"); // info panel tab
@@ -198,13 +198,13 @@ export default function TopPillHeader({ onAskGemini, onShare, sharing, otterOn, 
   };
 
   // Easter egg: the T, R, and final S of "StormHacks" in the credits are
-  // live buttons. Click all three to summon the otter; click any of them
+  // live buttons. Click all three to summon Stormy; click any of them
   // again to dismiss it. Zero visual hint — that's the point.
   const EGG_INDICES = [1, 3, 9];
   const [eggLetters, setEggLetters] = useState([]);
   const handleEgg = (i) => {
-    if (otterOn) {
-      onOtterChange?.(false);
+    if (stormyOn) {
+      onStormyChange?.(false);
       setEggLetters([]);
       return;
     }
@@ -212,7 +212,7 @@ export default function TopPillHeader({ onAskGemini, onShare, sharing, otterOn, 
     const next = [...eggLetters, i];
     if (next.length === EGG_INDICES.length) {
       setEggLetters([]);
-      onOtterChange?.(true);
+      onStormyChange?.(true);
     } else {
       setEggLetters(next);
     }
