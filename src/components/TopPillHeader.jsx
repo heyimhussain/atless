@@ -358,8 +358,11 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
                 all as movable, resizable tiles on a pannable, zoomable board
                 that persists across visits.
               </p>
-              <div className="relative mt-4 border-t border-neutral-200/70 pt-2 dark:border-white/10">
-                <div className="flex items-center justify-center gap-1 px-2.5 pt-1 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:text-stone-500">
+              <div className="mt-4 flex items-center border-t border-neutral-200/70 pt-2 dark:border-white/10">
+                {/* Invisible counterweight to the GitHub button so the credits
+                    stay truly centered while everything aligns on one axis. */}
+                <span aria-hidden="true" className="h-8 w-8 shrink-0" />
+                <div className="flex flex-1 items-center justify-center gap-1 px-2.5 pt-1 pb-1 text-center text-[11px] tracking-tight text-neutral-400 dark:text-stone-500">
                   <span>© 2026 Hussain Shah Hashmi - Made with</span>
                   <Heart size={11} fill="currentColor" className="shrink-0" />
                   <span>
@@ -387,7 +390,7 @@ export default function TopPillHeader({ onSummarize, summarizing, onShare, shari
                   rel="noreferrer"
                   aria-label="GitHub repository"
                   title="GitHub repository"
-                  className="absolute right-0 bottom-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-stone-700 transition outline-none hover:bg-stone-900 hover:text-white dark:bg-white/10 dark:text-stone-300 dark:hover:bg-white dark:hover:text-stone-900"
                 >
                   <svg
                     viewBox="0 0 24 24"
